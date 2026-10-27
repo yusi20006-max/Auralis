@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -30,21 +31,48 @@ import java.util.concurrent.ExecutionException
 class MainActivity : ComponentActivity() {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
+    private var pendingUri: Uri? = null
     private var selectedTitle by mutableStateOf("هنوز فایلی انتخاب نشده")
     private var isPlaying by mutableStateOf(false)
     private var status by mutableStateOf("یک فایل صوتی از حافظهٔ گوشی انتخاب کنید.")
 
     private val openAudio = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
-            try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            catch (_: SecurityException) { }
-            selectedTitle = uri.lastPathSegment?.substringAfterLast('/')?.substringAfter(':')?.takeIf { it.isNotBlank() } ?: "فایل صوتی انتخاب‌شده"
-            controller?.let {
-                it.setMediaItem(MediaItem.fromUri(uri))
-                it.prepare()
-                it.play()
-                status = "در حال پخش"
-            } ?: run { status = "پخش‌کننده هنوز آماده نیست؛ فایل را دوباره انتخاب کنید." }
+            try {
+                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: SecurityException) {
+                // The temporary read grant from OpenDocument remains usable for this activity session.
+            } catch (_: IllegalArgumentException) {
+                // Some document providers do not offer persistable grants.
+            }
+            pendingUri = uri
+            selectedTitle = uri.lastPathSegment
+                ?.substringAfterLast('/')
+                ?.substringAfter(':')
+                ?.takeIf { it.isNotBlank() }
+                ?: "فایل صوتی انتخاب‌شده"
+            startSelectedFileIfReady()
+        }
+    }
+
+    private fun startSelectedFileIfReady() {
+        val player = controller
+        val uri = pendingUri
+        if (player == null || uri == null) {
+            status = "فایل انتخاب شد؛ در انتظار آماده‌شدن پخش‌کننده…"
+            return
+        }
+        try {
+            status = "در حال آماده‌سازی فایل…"
+            isPlaying = false
+            player.pause()
+            player.setMediaItem(MediaItem.fromUri(uri))
+            player.prepare()
+            player.playWhenReady = true
+            player.play()
+        } catch (error: RuntimeException) {
+            isPlaying = false
+            status = "شروع پخش ناموفق بود: ${error.message ?: error.javaClass.simpleName}"
         }
     }
 
@@ -59,11 +87,46 @@ class MainActivity : ComponentActivity() {
                 controller?.addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(playing: Boolean) {
                         isPlaying = playing
-                        status = if (playing) "در حال پخش" else "پخش متوقف است"
+                        if (playing) {
+                            status = "در حال پخش"
+                        } else if (controller?.playWhenReady == true &&
+                            controller?.playbackState == Player.STATE_BUFFERING
+                        ) {
+                            status = "در حال بارگذاری صدا…"
+                        } else if (controller?.playbackState == Player.STATE_ENDED) {
+                            status = "پخش فایل به پایان رسید."
+                        } else if (controller?.playWhenReady == false && status == "در حال پخش") {
+                            status = "پخش متوقف است"
+                        }
+                    }
+
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        when (playbackState) {
+                            Player.STATE_BUFFERING -> if (controller?.playWhenReady == true) {
+                                status = "در حال بارگذاری صدا…"
+                            }
+                            Player.STATE_READY -> if (controller?.playWhenReady == true && !isPlaying) {
+                                status = "فایل آماده است؛ منتظر شروع صدا…"
+                            }
+                            Player.STATE_ENDED -> {
+                                isPlaying = false
+                                status = "پخش فایل به پایان رسید."
+                            }
+                        }
+                    }
+
+                    override fun onPlayerError(error: PlaybackException) {
+                        isPlaying = false
+                        status = "خطای پخش (${error.errorCodeName}): ${error.message ?: "قالب فایل پشتیبانی نمی‌شود"}"
                     }
                 })
-            } catch (_: ExecutionException) { status = "اتصال به پخش‌کننده ناموفق بود." }
-            catch (_: InterruptedException) { Thread.currentThread().interrupt(); status = "آماده‌سازی پخش‌کننده متوقف شد." }
+                startSelectedFileIfReady()
+            } catch (error: ExecutionException) {
+                status = "اتصال به پخش‌کننده ناموفق بود: ${error.cause?.message ?: error.message}"
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                status = "آماده‌سازی پخش‌کننده متوقف شد."
+            }
         }, mainExecutor)
 
         setContent {
@@ -86,8 +149,24 @@ class MainActivity : ComponentActivity() {
                                 Button(onClick = { openAudio.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3E8DFF))) { Text("انتخاب فایل صوتی") }
                                 Spacer(Modifier.height(12.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Button(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF725BFF))) { Text(if (isPlaying) "مکث" else "ادامهٔ پخش") }
-                                    Button(onClick = { controller?.stop(); isPlaying = false; status = "پخش متوقف شد" }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30384F))) { Text("توقف") }
+                                    Button(onClick = {
+                                        controller?.let {
+                                            if (it.isPlaying || it.playWhenReady) {
+                                                it.pause()
+                                                status = "پخش مکث شد"
+                                            } else if (it.currentMediaItem != null) {
+                                                it.play()
+                                                status = "درخواست ادامهٔ پخش ارسال شد…"
+                                            } else {
+                                                startSelectedFileIfReady()
+                                            }
+                                        } ?: run { status = "پخش‌کننده هنوز متصل نشده است." }
+                                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF725BFF))) { Text(if (isPlaying) "مکث" else "ادامهٔ پخش") }
+                                    Button(onClick = {
+                                        controller?.stop()
+                                        isPlaying = false
+                                        status = "پخش متوقف شد"
+                                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30384F))) { Text("توقف") }
                                 }
                             }
                         }
@@ -98,6 +177,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
     override fun onDestroy() {
         controller?.release()
         controller = null
