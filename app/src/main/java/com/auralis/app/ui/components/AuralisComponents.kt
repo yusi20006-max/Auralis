@@ -19,9 +19,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +33,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -50,6 +55,7 @@ fun AuralisPrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     loading: Boolean = false,
+    loadingLabel: String = "Loading",
     content: @Composable () -> Unit,
 ) {
     val shape = RoundedCornerShape(AuralisCorners.Button)
@@ -63,20 +69,25 @@ fun AuralisPrimaryButton(
             .clip(shape)
             .background(if (enabled && !loading) activeBrush else Brush.horizontalGradient(listOf(disabledColor, disabledColor)))
             .clickable(enabled = enabled && !loading, role = Role.Button, onClick = onClick)
-            .semantics { role = Role.Button },
+            .semantics {
+                role = Role.Button
+                if (loading) stateDescription = loadingLabel
+            },
         contentAlignment = Alignment.Center,
     ) {
-        if (loading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(22.dp),
-                color = AuralisColors.TextPrimary,
-                strokeWidth = 2.dp,
-            )
-        } else {
-            Box(
-                modifier = Modifier.padding(horizontal = AuralisSpacing.X4, vertical = AuralisSpacing.X3),
-                contentAlignment = Alignment.Center,
-            ) { content() }
+        CompositionLocalProvider(LocalContentColor provides AuralisColors.TextPrimary) {
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp).semantics { contentDescription = loadingLabel },
+                    color = AuralisColors.TextPrimary,
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Box(
+                    modifier = Modifier.padding(horizontal = AuralisSpacing.X4, vertical = AuralisSpacing.X3),
+                    contentAlignment = Alignment.Center,
+                ) { content() }
+            }
         }
     }
 }
@@ -231,7 +242,10 @@ fun AuralisProgressIndicator(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 4.dp, max = 8.dp)
-            .semantics { this.contentDescription = contentDescription },
+            .semantics {
+                this.contentDescription = contentDescription
+                progressBarRangeInfo = ProgressBarRangeInfo(played, 0f..1f)
+            },
     ) {
         val strokeWidth = size.height.coerceAtLeast(4.dp.toPx())
         val y = size.height / 2f
