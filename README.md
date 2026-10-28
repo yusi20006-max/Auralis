@@ -29,9 +29,9 @@ The first release focuses on a polished, reliable local listening experience. A 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
 
-## Status
+## Current status
 
-Project initialization. The application implementation has not yet been migrated from YasinCast. Existing YasinCast code is a reference to inspect and selectively reuse; it is not automatically considered production-ready for Auralis.
+The offline playback MVP and Media3 background service are implemented on the active feature branch. The project owner has tested the current playback flow; this does not imply that every planned UI, accessibility, or hosted-catalog feature is complete. Check the open pull request and CI for current integration status.
 
 ## License
 
