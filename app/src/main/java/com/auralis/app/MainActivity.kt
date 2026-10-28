@@ -242,7 +242,7 @@ class MainActivity : ComponentActivity() {
                         Box(
                             Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = AuralisSpacing.X6, top = AuralisSpacing.X6, bottom = bottomInset),
+                                .padding(start = AuralisSpacing.X6, top = AuralisSpacing.X6, end = AuralisSpacing.X6, bottom = bottomInset),
                             contentAlignment = Alignment.Center,
                         ) {
                             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
