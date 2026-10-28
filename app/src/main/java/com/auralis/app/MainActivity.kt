@@ -25,6 +25,9 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import java.util.concurrent.ExecutionException
+import com.auralis.app.ui.components.AuralisMiniPlayer
+import com.auralis.app.ui.components.MiniPlayerUiState
+import com.auralis.app.ui.components.resolveMiniPlayerUiState
 import com.auralis.app.ui.theme.AuralisColors
 import com.auralis.app.ui.theme.AuralisSpacing
 import com.auralis.app.ui.theme.AuralisTheme
@@ -37,6 +40,14 @@ class MainActivity : ComponentActivity() {
     private var selectedTitle by mutableStateOf("هنوز فایلی انتخاب نشده")
     private var isPlaying by mutableStateOf(false)
     private var status by mutableStateOf("یک فایل صوتی از حافظهٔ گوشی انتخاب کنید.")
+
+    // Session facts mirrored for the mini player. Every one of these is read back from the same
+    // MediaController that drives the existing screen; none of them is set optimistically.
+    private var playerState by mutableStateOf(Player.STATE_IDLE)
+    private var playWhenReady by mutableStateOf(false)
+    private var hasMediaItem by mutableStateOf(false)
+    private var hasPlayerError by mutableStateOf(false)
+    private var sessionTitle by mutableStateOf<String?>(null)
 
     private val openAudio = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
@@ -67,8 +78,12 @@ class MainActivity : ComponentActivity() {
         try {
             status = "در حال آماده‌سازی فایل…"
             isPlaying = false
+            hasPlayerError = false
             player.pause()
             player.setMediaItem(MediaItem.fromUri(uri))
+            // Only after setMediaItem returned: on the failure path below no media is loaded,
+            // so the bar must not claim otherwise.
+            hasMediaItem = true
             player.prepare()
             player.playWhenReady = true
             player.play()
@@ -76,6 +91,24 @@ class MainActivity : ComponentActivity() {
             isPlaying = false
             status = "شروع پخش ناموفق بود: ${error.message ?: error.javaClass.simpleName}"
         }
+    }
+
+    /**
+     * The one toggle used by both the original control and the mini player. Extracted verbatim so
+     * both entry points drive the very same existing session.
+     */
+    private fun togglePlayback() {
+        controller?.let {
+            if (it.isPlaying || it.playWhenReady) {
+                it.pause()
+                status = "پخش مکث شد"
+            } else if (it.currentMediaItem != null) {
+                it.play()
+                status = "درخواست ادامهٔ پخش ارسال شد…"
+            } else {
+                startSelectedFileIfReady()
+            }
+        } ?: run { status = "پخش‌کننده هنوز متصل نشده است." }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -86,6 +119,16 @@ class MainActivity : ComponentActivity() {
         future.addListener({
             try {
                 controller = future.get()
+                controller?.let { connected ->
+                    // Seed the mirrored facts from the session before listening, so a re-attached
+                    // controller never renders a stale or guessed state.
+                    playerState = connected.playbackState
+                    playWhenReady = connected.playWhenReady
+                    hasMediaItem = connected.currentMediaItem != null
+                    sessionTitle = connected.currentMediaItem?.mediaMetadata?.title
+                        ?.toString()
+                        ?.takeIf { it.isNotBlank() }
+                }
                 controller?.addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(playing: Boolean) {
                         isPlaying = playing
@@ -103,6 +146,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     override fun onPlaybackStateChanged(playbackState: Int) {
+                        playerState = playbackState
                         when (playbackState) {
                             Player.STATE_BUFFERING -> if (controller?.playWhenReady == true) {
                                 status = "در حال بارگذاری صدا…"
@@ -117,8 +161,20 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    override fun onPlayWhenReadyChanged(ready: Boolean, reason: Int) {
+                        playWhenReady = ready
+                    }
+
+                    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                        hasMediaItem = mediaItem != null
+                        sessionTitle = mediaItem?.mediaMetadata?.title
+                            ?.toString()
+                            ?.takeIf { it.isNotBlank() }
+                    }
+
                     override fun onPlayerError(error: PlaybackException) {
                         isPlaying = false
+                        hasPlayerError = true
                         status = "خطای پخش (${error.errorCodeName}): ${error.message ?: "قالب فایل پشتیبانی نمی‌شود"}"
                     }
                 })
@@ -134,8 +190,33 @@ class MainActivity : ComponentActivity() {
         setContent {
             val background = Brush.verticalGradient(listOf(AuralisColors.BackgroundDeep, AuralisColors.Surface, AuralisColors.BackgroundDeep))
             AuralisTheme {
+                val isSessionPlaying = isPlaying
+                val miniState = resolveMiniPlayerUiState(
+                    hasMediaItem = hasMediaItem,
+                    hasPlayerError = hasPlayerError,
+                    isBuffering = playerState == Player.STATE_BUFFERING,
+                    hasEnded = playerState == Player.STATE_ENDED,
+                    isPlaying = isSessionPlaying,
+                )
+                val miniPlayerVisible = miniState != MiniPlayerUiState.NONE
+                // Pause glyph only while the session really is playing, or is buffering with
+                // playWhenReady set. Anything else honestly offers "play".
+                val showPauseAction = isSessionPlaying ||
+                    (playWhenReady && playerState == Player.STATE_BUFFERING)
+                val trackTitle = sessionTitle
+                    ?: selectedTitle.takeIf {
+                        hasMediaItem && it.isNotBlank() && it != "هنوز فایلی انتخاب نشده"
+                    }
+                    ?: if (hasMediaItem) "عنوانی در دسترس نیست" else ""
+
                 Surface(Modifier.fillMaxSize(), color = AuralisColors.BackgroundDeep) {
                     Column(Modifier.fillMaxSize().background(background).padding(AuralisSpacing.X6), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        if (miniPlayerVisible) {
+                            // Absorbs half the leftover height so the existing content stays
+                            // centred above the bar; when the bar is hidden this is absent and
+                            // the layout is byte-for-byte the one from before.
+                            Spacer(Modifier.weight(1f))
+                        }
                         Text("AURALIS", color = AuralisColors.AccentCyan, fontSize = AuralisTypeScale.HeroMax, fontWeight = FontWeight.Black, letterSpacing = 5.sp)
                         Spacer(Modifier.height(6.dp))
                         Text("OFFLINE AUDIO", color = AuralisColors.PrimaryViolet, fontSize = AuralisTypeScale.Overline, letterSpacing = 3.sp)
@@ -151,19 +232,7 @@ class MainActivity : ComponentActivity() {
                                 Button(onClick = { openAudio.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryBlue, contentColor = AuralisColors.BackgroundDeep)) { Text("انتخاب فایل صوتی") }
                                 Spacer(Modifier.height(12.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Button(onClick = {
-                                        controller?.let {
-                                            if (it.isPlaying || it.playWhenReady) {
-                                                it.pause()
-                                                status = "پخش مکث شد"
-                                            } else if (it.currentMediaItem != null) {
-                                                it.play()
-                                                status = "درخواست ادامهٔ پخش ارسال شد…"
-                                            } else {
-                                                startSelectedFileIfReady()
-                                            }
-                                        } ?: run { status = "پخش‌کننده هنوز متصل نشده است." }
-                                    }, colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryViolet, contentColor = AuralisColors.BackgroundDeep)) { Text(if (isPlaying) "مکث" else "ادامهٔ پخش") }
+                                    Button(onClick = { togglePlayback() }, colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryViolet, contentColor = AuralisColors.BackgroundDeep)) { Text(if (isPlaying) "مکث" else "ادامهٔ پخش") }
                                     Button(onClick = {
                                         controller?.stop()
                                         isPlaying = false
@@ -174,6 +243,15 @@ class MainActivity : ComponentActivity() {
                         }
                         Spacer(Modifier.height(22.dp))
                         Text("نسخهٔ آزمایشی · بدون سرور و حساب کاربری", color = AuralisColors.TextSecondary, fontSize = AuralisTypeScale.Caption, textAlign = TextAlign.Center)
+                        if (miniPlayerVisible) {
+                            Spacer(Modifier.weight(1f))
+                            AuralisMiniPlayer(
+                                title = trackTitle,
+                                state = miniState,
+                                showPauseAction = showPauseAction,
+                                onPlayPause = { togglePlayback() },
+                            )
+                        }
                     }
                 }
             }
