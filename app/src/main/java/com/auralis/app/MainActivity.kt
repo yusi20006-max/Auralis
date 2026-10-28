@@ -28,6 +28,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import java.util.concurrent.ExecutionException
 import com.auralis.app.ui.components.AuralisMiniPlayer
 import com.auralis.app.ui.components.MiniPlayerUiState
+import com.auralis.app.ui.components.fileNameFromDocumentPath
 import com.auralis.app.ui.components.resolveMiniPlayerTitle
 import com.auralis.app.ui.components.resolveMiniPlayerUiState
 import com.auralis.app.ui.theme.AuralisColors
@@ -50,6 +51,10 @@ class MainActivity : ComponentActivity() {
     private var hasMediaItem by mutableStateOf(false)
     private var hasPlayerError by mutableStateOf(false)
     private var sessionTitle by mutableStateOf<String?>(null)
+    private var attachedFileName by mutableStateOf<String?>(null)
+
+    /** Display name of a document URI; null when the URI carries no usable name. */
+    private fun displayNameFor(uri: Uri?): String? = fileNameFromDocumentPath(uri?.lastPathSegment)
 
     private val openAudio = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
@@ -61,11 +66,7 @@ class MainActivity : ComponentActivity() {
                 // Some document providers do not offer persistable grants.
             }
             pendingUri = uri
-            selectedTitle = uri.lastPathSegment
-                ?.substringAfterLast('/')
-                ?.substringAfter(':')
-                ?.takeIf { it.isNotBlank() }
-                ?: "فایل صوتی انتخاب‌شده"
+            selectedTitle = displayNameFor(uri) ?: "فایل صوتی انتخاب‌شده"
             startSelectedFileIfReady()
         }
     }
@@ -131,6 +132,7 @@ class MainActivity : ComponentActivity() {
                     playerState = connected.playbackState
                     playWhenReady = connected.playWhenReady
                     hasMediaItem = connected.currentMediaItem != null
+                    attachedFileName = displayNameFor(connected.currentMediaItem?.localConfiguration?.uri)
                     sessionTitle = connected.mediaMetadata.title
                         ?.toString()
                         ?.takeIf { it.isNotBlank() }
@@ -173,6 +175,7 @@ class MainActivity : ComponentActivity() {
 
                     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                         hasMediaItem = mediaItem != null
+                        attachedFileName = displayNameFor(mediaItem?.localConfiguration?.uri)
                         sessionTitle = mediaItem?.mediaMetadata?.title
                             ?.toString()
                             ?.takeIf { it.isNotBlank() }
@@ -221,9 +224,9 @@ class MainActivity : ComponentActivity() {
                 val trackTitle = resolveMiniPlayerTitle(
                     hasMediaItem = hasMediaItem,
                     mediaMetadataTitle = sessionTitle,
-                    pickedFileName = selectedTitle.takeIf {
-                        it.isNotBlank() && it != "هنوز فایلی انتخاب نشده"
-                    },
+                    pickedFileName = selectedTitle
+                        .takeIf { it.isNotBlank() && it != "هنوز فایلی انتخاب نشده" }
+                        ?: attachedFileName,
                 )
 
                 Surface(Modifier.fillMaxSize(), color = AuralisColors.BackgroundDeep) {

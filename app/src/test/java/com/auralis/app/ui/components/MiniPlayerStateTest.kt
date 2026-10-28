@@ -1,6 +1,7 @@
 package com.auralis.app.ui.components
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -133,5 +134,23 @@ class MiniPlayerStateTest {
             "",
             resolveMiniPlayerTitle(hasMediaItem = false, mediaMetadataTitle = "ignored", pickedFileName = "f.mp3"),
         )
+    }
+
+    @Test
+    fun documentPathProducesTheRealFileNameOrNothing() {
+        assertEquals("song.mp3", fileNameFromDocumentPath("primary:Music/song.mp3"))
+        assertEquals("intro.m4a", fileNameFromDocumentPath("primary:recordings/intro.m4a"))
+        // No folder segment: the authority prefix must still be stripped.
+        assertEquals("solo.mp3", fileNameFromDocumentPath("primary:solo.mp3"))
+        // Plain name with neither separator: unchanged.
+        assertEquals("plain.mp3", fileNameFromDocumentPath("plain.mp3"))
+    }
+
+    @Test
+    fun documentPathRefusesToInventAName() {
+        assertNull(fileNameFromDocumentPath(null))
+        assertNull(fileNameFromDocumentPath(""))
+        assertNull(fileNameFromDocumentPath("   "))
+        assertNull(fileNameFromDocumentPath("folder/"))
     }
 }

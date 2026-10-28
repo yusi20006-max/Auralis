@@ -51,6 +51,16 @@ fun miniPlayerStateLabel(state: MiniPlayerUiState): String = when (state) {
 const val MINI_PLAYER_UNKNOWN_TITLE = "عنوانی در دسترس نیست"
 
 /**
+ * Display name for a picked document URI path, e.g. `primary:Music/song.mp3` → `song.mp3`.
+ * Returns null when the path carries no usable name, so callers can fall back deliberately
+ * instead of inventing a title.
+ */
+fun fileNameFromDocumentPath(path: String?): String? = path
+    ?.substringAfterLast('/')
+    ?.substringAfter(':')
+    ?.takeIf { it.isNotBlank() }
+
+/**
  * Title shown on the bar: real playback metadata first, then the real picked file name, then the
  * placeholder. Empty only when no media is loaded — that case is never rendered.
  *
