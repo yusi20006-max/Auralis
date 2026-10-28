@@ -6,6 +6,7 @@ import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 
 private val AuralisDarkColorScheme = darkColorScheme(
     primary = AuralisColors.PrimaryBlue,
@@ -49,7 +50,7 @@ private val AuralisTypography = Typography(
     bodyLarge = TextStyle(
         fontSize = AuralisTypeScale.BodyLarge,
         fontWeight = FontWeight.Normal,
-        lineHeight = 24.sp,
+        lineHeight = AuralisLineHeight.BodyLarge,
     ),
     bodyMedium = TextStyle(
         fontSize = AuralisTypeScale.BodyMedium,
