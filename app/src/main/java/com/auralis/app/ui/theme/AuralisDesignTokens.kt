@@ -22,7 +22,8 @@ object AuralisColors {
     val TextTertiary = Color(0xFF64748B)
     val Success = Color(0xFF34D399)
     val Error = Color(0xFFF87171)
-    val BorderSubtle = Color(0xFF1E293B)
+    // Intentional alias: outlines use the same low-emphasis tone as elevated surfaces.
+    val BorderSubtle = SurfaceElevated
 }
 
 object AuralisSpacing {
@@ -68,10 +69,20 @@ object AuralisTypeScale {
     val Overline = 11.sp
 }
 
+object AuralisLineHeight {
+    val Hero = 40.sp
+    val TitleLarge = 32.sp
+    val TitleMedium = 28.sp
+    val BodyLarge = 24.sp
+    val BodyMedium = 20.sp
+    val Caption = 16.sp
+    val Overline = 14.sp
+}
+
 val AuralisShapes = Shapes(
     extraSmall = RoundedCornerShape(AuralisCorners.Small),
     small = RoundedCornerShape(AuralisCorners.Small),
     medium = RoundedCornerShape(AuralisCorners.Card),
-    large = RoundedCornerShape(20.dp),
-    extraLarge = RoundedCornerShape(24.dp),
+    large = RoundedCornerShape(AuralisCorners.Large),
+    extraLarge = RoundedCornerShape(AuralisCorners.ExtraLarge),
 )
