@@ -123,9 +123,11 @@ class MainActivity : ComponentActivity() {
                 controller = future.get()
                 controller?.let { connected ->
                     // Seed the mirrored facts from the session before listening, so a re-attached
-                    // controller never renders a stale or guessed state. isPlaying is seeded too:
-                    // a recreated activity must not report PAUSED while the service still plays.
+                    // controller never renders a stale or guessed state. isPlaying and the retained
+                    // error are seeded too: a recreated activity must not report PAUSED while the
+                    // service still plays, nor hide an error Media3 does not replay as a callback.
                     isPlaying = connected.isPlaying
+                    hasPlayerError = connected.playerError != null
                     playerState = connected.playbackState
                     playWhenReady = connected.playWhenReady
                     hasMediaItem = connected.currentMediaItem != null
