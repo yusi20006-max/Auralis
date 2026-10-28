@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -27,6 +28,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import java.util.concurrent.ExecutionException
 import com.auralis.app.ui.components.AuralisMiniPlayer
 import com.auralis.app.ui.components.MiniPlayerUiState
+import com.auralis.app.ui.components.resolveMiniPlayerTitle
 import com.auralis.app.ui.components.resolveMiniPlayerUiState
 import com.auralis.app.ui.theme.AuralisColors
 import com.auralis.app.ui.theme.AuralisSpacing
@@ -121,11 +123,13 @@ class MainActivity : ComponentActivity() {
                 controller = future.get()
                 controller?.let { connected ->
                     // Seed the mirrored facts from the session before listening, so a re-attached
-                    // controller never renders a stale or guessed state.
+                    // controller never renders a stale or guessed state. isPlaying is seeded too:
+                    // a recreated activity must not report PAUSED while the service still plays.
+                    isPlaying = connected.isPlaying
                     playerState = connected.playbackState
                     playWhenReady = connected.playWhenReady
                     hasMediaItem = connected.currentMediaItem != null
-                    sessionTitle = connected.currentMediaItem?.mediaMetadata?.title
+                    sessionTitle = connected.mediaMetadata.title
                         ?.toString()
                         ?.takeIf { it.isNotBlank() }
                 }
@@ -172,6 +176,15 @@ class MainActivity : ComponentActivity() {
                             ?.takeIf { it.isNotBlank() }
                     }
 
+                    override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+                        // Combined player metadata, not just the MediaItem's: this is where
+                        // titles parsed from the file itself (ID3 and friends) arrive, and it
+                        // fires independently of onMediaItemTransition.
+                        sessionTitle = mediaMetadata.title
+                            ?.toString()
+                            ?.takeIf { it.isNotBlank() }
+                    }
+
                     override fun onPlayerError(error: PlaybackException) {
                         isPlaying = false
                         hasPlayerError = true
@@ -203,11 +216,13 @@ class MainActivity : ComponentActivity() {
                 // playWhenReady set. Anything else honestly offers "play".
                 val showPauseAction = isSessionPlaying ||
                     (playWhenReady && playerState == Player.STATE_BUFFERING)
-                val trackTitle = sessionTitle
-                    ?: selectedTitle.takeIf {
-                        hasMediaItem && it.isNotBlank() && it != "هنوز فایلی انتخاب نشده"
-                    }
-                    ?: if (hasMediaItem) "عنوانی در دسترس نیست" else ""
+                val trackTitle = resolveMiniPlayerTitle(
+                    hasMediaItem = hasMediaItem,
+                    mediaMetadataTitle = sessionTitle,
+                    pickedFileName = selectedTitle.takeIf {
+                        it.isNotBlank() && it != "هنوز فایلی انتخاب نشده"
+                    },
+                )
 
                 Surface(Modifier.fillMaxSize(), color = AuralisColors.BackgroundDeep) {
                     Column(Modifier.fillMaxSize().background(background).padding(AuralisSpacing.X6), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {

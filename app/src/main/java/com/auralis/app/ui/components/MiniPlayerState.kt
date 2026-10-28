@@ -46,3 +46,24 @@ fun miniPlayerStateLabel(state: MiniPlayerUiState): String = when (state) {
     MiniPlayerUiState.ENDED -> "پخش به پایان رسید"
     MiniPlayerUiState.ERROR -> "خطای پخش"
 }
+
+/** Placeholder used when a track is loaded but neither its metadata nor its file name is usable. */
+const val MINI_PLAYER_UNKNOWN_TITLE = "عنوانی در دسترس نیست"
+
+/**
+ * Title shown on the bar: real playback metadata first, then the real picked file name, then the
+ * placeholder. Empty only when no media is loaded — that case is never rendered.
+ *
+ * [pickedFileName] must already be the genuine file name, not the screen's "nothing selected"
+ * sentinel; callers filter that out before passing it in.
+ */
+fun resolveMiniPlayerTitle(
+    hasMediaItem: Boolean,
+    mediaMetadataTitle: String?,
+    pickedFileName: String?,
+): String = when {
+    !hasMediaItem -> ""
+    !mediaMetadataTitle.isNullOrBlank() -> mediaMetadataTitle
+    !pickedFileName.isNullOrBlank() -> pickedFileName
+    else -> MINI_PLAYER_UNKNOWN_TITLE
+}

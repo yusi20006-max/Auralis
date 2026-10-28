@@ -81,4 +81,57 @@ class MiniPlayerStateTest {
         assertEquals("خطای پخش", miniPlayerStateLabel(MiniPlayerUiState.ERROR))
         assertEquals("پخش به پایان رسید", miniPlayerStateLabel(MiniPlayerUiState.ENDED))
     }
+
+    @Test
+    fun titlePrefersRealPlaybackMetadata() {
+        assertEquals(
+            "عنوان واقعی از متادیتا",
+            resolveMiniPlayerTitle(
+                hasMediaItem = true,
+                mediaMetadataTitle = "عنوان واقعی از متادیتا",
+                pickedFileName = "scan-01.mp3",
+            ),
+        )
+    }
+
+    @Test
+    fun titleFallsBackToThePickedFileNameWhenMetadataIsMissing() {
+        assertEquals(
+            "scan-01.mp3",
+            resolveMiniPlayerTitle(
+                hasMediaItem = true,
+                mediaMetadataTitle = null,
+                pickedFileName = "scan-01.mp3",
+            ),
+        )
+        assertEquals(
+            "scan-01.mp3",
+            resolveMiniPlayerTitle(
+                hasMediaItem = true,
+                mediaMetadataTitle = "   ",
+                pickedFileName = "scan-01.mp3",
+            ),
+        )
+    }
+
+    @Test
+    fun titleUsesThePlaceholderWhenNothingIsAvailable() {
+        assertEquals(
+            MINI_PLAYER_UNKNOWN_TITLE,
+            resolveMiniPlayerTitle(hasMediaItem = true, mediaMetadataTitle = null, pickedFileName = null),
+        )
+        assertEquals(
+            MINI_PLAYER_UNKNOWN_TITLE,
+            resolveMiniPlayerTitle(hasMediaItem = true, mediaMetadataTitle = "", pickedFileName = ""),
+        )
+    }
+
+    @Test
+    fun titleIsEmptyWhenThereIsNoMedia() {
+        // Nothing to show: the caller must not render the bar at all in this case.
+        assertEquals(
+            "",
+            resolveMiniPlayerTitle(hasMediaItem = false, mediaMetadataTitle = "ignored", pickedFileName = "f.mp3"),
+        )
+    }
 }
