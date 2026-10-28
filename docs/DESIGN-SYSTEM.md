@@ -1,6 +1,6 @@
 # Auralis â€” Design System
 
-**Status:** Approved visual specification  
+**Status:** Approved visual specification; shared tokens and contract tests implemented  
 **Platform:** Android / Jetpack Compose  
 **Theme:** Dark only  
 **Product:** Persian-first player for AI-generated podcasts
@@ -49,7 +49,7 @@ Preferred Persian typeface: **Vazirmatn** or **IRANSansX**. Complementary Latin 
 | Caption | 12sp | Regular | Duration and metadata |
 | Overline | 11sp | Medium | Categories and compact labels |
 
-Prefer semantic Material typography styles and the shared token definitions. Support system font scaling; do not hard-code text into bitmap artwork.
+The shared token file defines type sizes and line heights; the Material typography maps semantic styles to those values. Prefer semantic Material typography styles. Support system font scaling; do not hard-code text into bitmap artwork.
 
 ## Spacing and shape
 
@@ -99,7 +99,7 @@ All playback controls must reflect the real Media3 player state; never display â
 
 ## Engineering rules
 
-- Store colors, spacing, shapes, typography, and motion durations in shared Kotlin tokens.
+- Store colors, spacing, shapes, typography, line heights, and motion durations in shared Kotlin tokens.
 - Use a single app theme entry point for Compose screens.
 - Components should consume tokens and semantic Material styles, not define their own competing palettes.
 - Keep playback/service logic independent of visual styling.
@@ -109,7 +109,7 @@ All playback controls must reflect the real Media3 player state; never display â
 ## Implementation status
 
 - [x] Final color and layout specification documented.
-- [ ] Shared Compose tokens compiled by CI.
+- [x] Shared Compose tokens implemented; token contract tests added (CI validation pending for this commit).
 - [ ] Existing screen migrated to theme tokens.
 - [ ] Reusable buttons, cards, labels, mini-player, and player controls implemented.
 - [ ] RTL/accessibility checks completed on a real device.
