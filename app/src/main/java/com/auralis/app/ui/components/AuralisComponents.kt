@@ -34,6 +34,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.auralis.app.ui.theme.AuralisColors
 import com.auralis.app.ui.theme.AuralisCorners
@@ -260,6 +261,33 @@ fun AuralisProgressIndicator(
                 strokeWidth = strokeWidth,
                 cap = cap,
             )
+        }
+    }
+}
+
+
+@Preview(showBackground = true, backgroundColor = 0xFF070A12)
+@Composable
+private fun AuralisComponentsPreview() {
+    com.auralis.app.ui.theme.AuralisTheme {
+        Column(
+            modifier = Modifier.fillMaxWidth().background(AuralisColors.BackgroundDeep).padding(AuralisSpacing.X4),
+            verticalArrangement = Arrangement.spacedBy(AuralisSpacing.X3),
+        ) {
+            AuralisPrimaryButton(onClick = {}, modifier = Modifier.fillMaxWidth()) {
+                Text("Primary action", color = AuralisColors.TextPrimary)
+            }
+            AuralisSecondaryButton(onClick = {}) {
+                Text("Secondary action")
+            }
+            AuralisAiGeneratedLabel()
+            AuralisEpisodeCard(
+                title = "A sample episode title that may wrap to two lines",
+                metadata = "12 min · Offline",
+                artwork = { Text("♪", color = AuralisColors.TextSecondary) },
+                trailingContent = { Text("▶", color = AuralisColors.TextPrimary) },
+            )
+            AuralisProgressIndicator(playedFraction = 0.42f, bufferedFraction = 0.68f)
         }
     }
 }
