@@ -9,13 +9,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -27,6 +25,10 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import java.util.concurrent.ExecutionException
+import com.auralis.app.ui.theme.AuralisColors
+import com.auralis.app.ui.theme.AuralisSpacing
+import com.auralis.app.ui.theme.AuralisTheme
+import com.auralis.app.ui.theme.AuralisTypeScale
 
 class MainActivity : ComponentActivity() {
     private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -130,23 +132,23 @@ class MainActivity : ComponentActivity() {
         }, mainExecutor)
 
         setContent {
-            val background = Brush.verticalGradient(listOf(Color(0xFF070A12), Color(0xFF11172A), Color(0xFF080B13)))
-            MaterialTheme {
-                Surface(Modifier.fillMaxSize(), color = Color(0xFF080B13)) {
-                    Column(Modifier.fillMaxSize().background(background).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text("AURALIS", color = Color(0xFF73E7FF), fontSize = 30.sp, fontWeight = FontWeight.Black, letterSpacing = 5.sp)
+            val background = Brush.verticalGradient(listOf(AuralisColors.BackgroundDeep, AuralisColors.Surface, AuralisColors.BackgroundDeep))
+            AuralisTheme {
+                Surface(Modifier.fillMaxSize(), color = AuralisColors.BackgroundDeep) {
+                    Column(Modifier.fillMaxSize().background(background).padding(AuralisSpacing.X6), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Text("AURALIS", color = AuralisColors.AccentCyan, fontSize = AuralisTypeScale.HeroMax, fontWeight = FontWeight.Black, letterSpacing = 5.sp)
                         Spacer(Modifier.height(6.dp))
-                        Text("OFFLINE AUDIO", color = Color(0xFF9A8BFF), fontSize = 11.sp, letterSpacing = 3.sp)
-                        Spacer(Modifier.height(40.dp))
-                        Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = Color(0xFF151B2C)) {
-                            Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("پخش‌کنندهٔ آفلاین", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                        Text("OFFLINE AUDIO", color = AuralisColors.PrimaryViolet, fontSize = AuralisTypeScale.Overline, letterSpacing = 3.sp)
+                        Spacer(Modifier.height(AuralisSpacing.X8 + AuralisSpacing.X2))
+                        Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge, color = AuralisColors.Surface) {
+                            Column(Modifier.padding(AuralisSpacing.X6), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("پخش‌کنندهٔ آفلاین", color = AuralisColors.TextPrimary, fontSize = AuralisTypeScale.TitleLargeMin, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.height(16.dp))
-                                Text(selectedTitle, color = Color(0xFFD9DEEF), textAlign = TextAlign.Center, fontSize = 15.sp)
+                                Text(selectedTitle, color = AuralisColors.TextPrimary, textAlign = TextAlign.Center, fontSize = AuralisTypeScale.BodyMedium)
                                 Spacer(Modifier.height(10.dp))
-                                Text(status, color = Color(0xFF9CA8C7), textAlign = TextAlign.Center, fontSize = 13.sp)
+                                Text(status, color = AuralisColors.TextSecondary, textAlign = TextAlign.Center, fontSize = AuralisTypeScale.BodyMedium)
                                 Spacer(Modifier.height(24.dp))
-                                Button(onClick = { openAudio.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3E8DFF))) { Text("انتخاب فایل صوتی") }
+                                Button(onClick = { openAudio.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryBlue, contentColor = AuralisColors.BackgroundDeep)) { Text("انتخاب فایل صوتی") }
                                 Spacer(Modifier.height(12.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Button(onClick = {
@@ -161,17 +163,17 @@ class MainActivity : ComponentActivity() {
                                                 startSelectedFileIfReady()
                                             }
                                         } ?: run { status = "پخش‌کننده هنوز متصل نشده است." }
-                                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF725BFF))) { Text(if (isPlaying) "مکث" else "ادامهٔ پخش") }
+                                    }, colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryViolet, contentColor = AuralisColors.BackgroundDeep)) { Text(if (isPlaying) "مکث" else "ادامهٔ پخش") }
                                     Button(onClick = {
                                         controller?.stop()
                                         isPlaying = false
                                         status = "پخش متوقف شد"
-                                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30384F))) { Text("توقف") }
+                                    }, colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.SurfaceElevated)) { Text("توقف") }
                                 }
                             }
                         }
                         Spacer(Modifier.height(22.dp))
-                        Text("نسخهٔ آزمایشی · بدون سرور و حساب کاربری", color = Color(0xFF747F9E), fontSize = 12.sp, textAlign = TextAlign.Center)
+                        Text("نسخهٔ آزمایشی · بدون سرور و حساب کاربری", color = AuralisColors.TextSecondary, fontSize = AuralisTypeScale.Caption, textAlign = TextAlign.Center)
                     }
                 }
             }
