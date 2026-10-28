@@ -24,8 +24,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -102,10 +100,11 @@ fun AuralisMiniPlayer(
                     horizontalArrangement = Arrangement.spacedBy(AuralisSpacing.X2),
                 ) {
                     if (state == MiniPlayerUiState.BUFFERING) {
+                        // Deliberately no contentDescription: the label immediately beside it already
+                        // announces the state, so describing the spinner too would make TalkBack say
+                        // the same thing twice (the same reason stateDescription is absent here).
                         CircularProgressIndicator(
-                            modifier = Modifier
-                                .size(12.dp)
-                                .semantics { contentDescription = stateLabel },
+                            modifier = Modifier.size(12.dp),
                             color = AuralisColors.AccentCyan,
                             strokeWidth = 2.dp,
                         )

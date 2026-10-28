@@ -305,10 +305,9 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         if (miniPlayerVisible) {
-                            // Overlays the bottom of the window instead of reserving layout height,
-                            // so this change adds no height pressure to a column that was already
-                            // non-scrollable: on tall screens the centred content clears the bar
-                            // entirely, and on short screens the layout is exactly what it was before.
+                            // Sits inside the band bottomInset reserved above, so it can never
+                            // cover the controls; the column scrolls so a short window, split-screen
+                            // or a large font scale cannot clip them either.
                             AuralisMiniPlayer(
                                 title = trackTitle,
                                 state = miniState,

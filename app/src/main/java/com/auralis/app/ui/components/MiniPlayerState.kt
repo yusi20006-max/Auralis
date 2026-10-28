@@ -51,9 +51,12 @@ fun miniPlayerStateLabel(state: MiniPlayerUiState): String = when (state) {
 const val MINI_PLAYER_UNKNOWN_TITLE = "عنوانی در دسترس نیست"
 
 /**
- * Display name for a picked document URI path, e.g. `primary:Music/song.mp3` → `song.mp3`.
- * Returns null when the path carries no usable name, so callers can fall back deliberately
- * instead of inventing a title.
+ * URI-segment fallback for a picked document path, e.g. `primary:Music/song.mp3` → `song.mp3`.
+ *
+ * Only a fallback: providers such as MediaDocumentsProvider put an opaque id in the segment
+ * (`audio:1234`), so callers ask the provider for `OpenableColumns.DISPLAY_NAME` first and reach
+ * for this when that query yields nothing. Returns null when the segment carries no usable name,
+ * so callers can fall back deliberately instead of inventing a title.
  */
 fun fileNameFromDocumentPath(path: String?): String? = path
     ?.substringAfterLast('/')
