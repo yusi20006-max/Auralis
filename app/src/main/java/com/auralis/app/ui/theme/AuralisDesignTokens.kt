@@ -48,6 +48,8 @@ object AuralisCorners {
     val Button = 14.dp
     val Artwork = 14.dp
     val Small = 12.dp
+    val Large = 20.dp
+    val ExtraLarge = 24.dp
 }
 
 object AuralisMotion {
