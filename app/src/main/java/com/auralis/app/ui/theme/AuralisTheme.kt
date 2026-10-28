@@ -6,7 +6,6 @@ import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 
 private val AuralisDarkColorScheme = darkColorScheme(
     primary = AuralisColors.PrimaryBlue,
@@ -30,22 +29,22 @@ private val AuralisTypography = Typography(
     displayLarge = TextStyle(
         fontSize = AuralisTypeScale.HeroMax,
         fontWeight = FontWeight.Bold,
-        lineHeight = 40.sp,
+        lineHeight = AuralisLineHeight.Hero,
     ),
     headlineLarge = TextStyle(
         fontSize = AuralisTypeScale.TitleLargeMax,
         fontWeight = FontWeight.SemiBold,
-        lineHeight = 32.sp,
+        lineHeight = AuralisLineHeight.TitleLarge,
     ),
     titleLarge = TextStyle(
         fontSize = AuralisTypeScale.TitleMediumMax,
         fontWeight = FontWeight.SemiBold,
-        lineHeight = 28.sp,
+        lineHeight = AuralisLineHeight.TitleMedium,
     ),
     titleMedium = TextStyle(
         fontSize = AuralisTypeScale.BodyLarge,
         fontWeight = FontWeight.SemiBold,
-        lineHeight = 24.sp,
+        lineHeight = AuralisLineHeight.BodyLarge,
     ),
     bodyLarge = TextStyle(
         fontSize = AuralisTypeScale.BodyLarge,
@@ -55,12 +54,12 @@ private val AuralisTypography = Typography(
     bodyMedium = TextStyle(
         fontSize = AuralisTypeScale.BodyMedium,
         fontWeight = FontWeight.Normal,
-        lineHeight = 20.sp,
+        lineHeight = AuralisLineHeight.BodyMedium,
     ),
     labelSmall = TextStyle(
         fontSize = AuralisTypeScale.Caption,
         fontWeight = FontWeight.Normal,
-        lineHeight = 16.sp,
+        lineHeight = AuralisLineHeight.Caption,
     ),
 )
 
