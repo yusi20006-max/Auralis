@@ -25,6 +25,7 @@ The first release focuses on a polished, reliable local listening experience. A 
 
 - [Product scope](docs/PRODUCT.md)
 - [Brand guide](docs/BRAND.md)
+- [Design system](docs/DESIGN-SYSTEM.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
 
