@@ -16,25 +16,26 @@ Suggested short description:
 
 ## Visual direction
 
-- Deep black backgrounds.
-- Dark navy surfaces.
-- Electric cyan/blue as the primary interactive accent.
-- Violet as a secondary accent, especially in gradients and branded artwork.
+- Deep navy-black background, elevated navy surfaces, and a restrained electric-blue-to-violet primary gradient.
+- Cyan is reserved for AI-generated labels and selected secondary highlights.
 - High contrast, restrained glow, clear typography, and generous spacing.
 - The user-provided Auralis “A” logo is the primary brand reference.
 
-Initial design tokens (provisional):
+The approved color palette, typography scale, spacing, shapes, components, motion, and RTL/accessibility rules are defined in the [Auralis Design System](DESIGN-SYSTEM.md). The values below are the canonical specification; do not introduce a competing provisional palette.
 
 | Token | Value | Intended use |
 |---|---|---|
-| Background | #08090F | Main app background |
-| Surface | #10172B | Cards and panels |
-| Primary | #22BFFF | Main actions and active states |
-| Secondary | #A855F7 | Secondary accent |
-| Text | #F4F6FF | Primary text |
-| Muted text | #A4ABC4 | Secondary metadata |
-
-These values are a starting point, not sampled exact values from the original logo file. Tune them after reviewing the actual asset in the app.
+| Background Deep | #070A12 | Main app background |
+| Surface | #0F172A | Cards and mini-player |
+| Surface Elevated | #1E293B | Raised controls |
+| Primary Gradient | #4F8CFF → #9B5CFF | Primary actions |
+| Accent Cyan | #22D3EE | AI-generated label |
+| Text Primary | #E8F1FF | Main text |
+| Text Secondary | #94A3B8 | Descriptions and metadata |
+| Text Tertiary | #64748B | Low-emphasis metadata |
+| Success | #34D399 | Success states |
+| Error | #F87171 | Error states |
+| Border Subtle | #1E293B | Dividers and outlines |
 
 ## Interface references
 
