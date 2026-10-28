@@ -148,7 +148,7 @@ class MainActivity : ComponentActivity() {
                                 Spacer(Modifier.height(10.dp))
                                 Text(status, color = AuralisColors.TextSecondary, textAlign = TextAlign.Center, fontSize = AuralisTypeScale.BodyMedium)
                                 Spacer(Modifier.height(24.dp))
-                                Button(onClick = { openAudio.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryBlue)) { Text("انتخاب فایل صوتی") }
+                                Button(onClick = { openAudio.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryBlue, contentColor = AuralisColors.BackgroundDeep)) { Text("انتخاب فایل صوتی") }
                                 Spacer(Modifier.height(12.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Button(onClick = {
@@ -163,7 +163,7 @@ class MainActivity : ComponentActivity() {
                                                 startSelectedFileIfReady()
                                             }
                                         } ?: run { status = "پخش‌کننده هنوز متصل نشده است." }
-                                    }, colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryViolet)) { Text(if (isPlaying) "مکث" else "ادامهٔ پخش") }
+                                    }, colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryViolet, contentColor = AuralisColors.BackgroundDeep)) { Text(if (isPlaying) "مکث" else "ادامهٔ پخش") }
                                     Button(onClick = {
                                         controller?.stop()
                                         isPlaying = false
@@ -173,7 +173,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         Spacer(Modifier.height(22.dp))
-                        Text("نسخهٔ آزمایشی · بدون سرور و حساب کاربری", color = AuralisColors.TextTertiary, fontSize = AuralisTypeScale.Caption, textAlign = TextAlign.Center)
+                        Text("نسخهٔ آزمایشی · بدون سرور و حساب کاربری", color = AuralisColors.TextSecondary, fontSize = AuralisTypeScale.Caption, textAlign = TextAlign.Center)
                     }
                 }
             }
