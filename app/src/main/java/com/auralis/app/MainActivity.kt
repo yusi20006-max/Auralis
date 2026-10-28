@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -55,8 +56,37 @@ class MainActivity : ComponentActivity() {
     private var sessionTitle by mutableStateOf<String?>(null)
     private var attachedFileName by mutableStateOf<String?>(null)
 
-    /** Display name of a document URI; null when the URI carries no usable name. */
-    private fun displayNameFor(uri: Uri?): String? = fileNameFromDocumentPath(uri?.lastPathSegment)
+    /**
+     * Display name of a document URI; null when the URI carries no usable name.
+     *
+     * The URI segment is only a hint: for MediaDocumentsProvider, `document/audio%3A1234`
+     * yields the opaque id `audio:1234`, whose numeric tail is not a file name. The provider
+     * owns the human-readable name, so ask for it first and fall back to parsing the segment
+     * only when the provider cannot answer (`file:` URIs, providers without the column).
+     *
+     * The query is read-only metadata and does not touch the persisted grant.
+     */
+    private fun displayNameFor(uri: Uri?): String? {
+        val resolved = uri ?: return null
+        if (resolved.scheme == "content") {
+            try {
+                contentResolver
+                    .query(resolved, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                    ?.use { cursor ->
+                        val column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (column != -1 && cursor.moveToFirst()) {
+                            cursor.getString(column)?.takeIf { it.isNotBlank() }
+                        } else {
+                            null
+                        }
+                    }
+                    ?.let { return it }
+            } catch (_: Exception) {
+                // The provider refused the query; fall through to the URI-segment fallback.
+            }
+        }
+        return fileNameFromDocumentPath(resolved.lastPathSegment)
+    }
 
     private val openAudio = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
