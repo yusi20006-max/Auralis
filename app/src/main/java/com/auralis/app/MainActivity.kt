@@ -230,46 +230,46 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Surface(Modifier.fillMaxSize(), color = AuralisColors.BackgroundDeep) {
-                    Column(Modifier.fillMaxSize().background(background).padding(AuralisSpacing.X6), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        if (miniPlayerVisible) {
-                            // Absorbs half the leftover height so the existing content stays
-                            // centred above the bar; when the bar is hidden this is absent and
-                            // the layout is byte-for-byte the one from before.
-                            Spacer(Modifier.weight(1f))
-                        }
-                        Text("AURALIS", color = AuralisColors.AccentCyan, fontSize = AuralisTypeScale.HeroMax, fontWeight = FontWeight.Black, letterSpacing = 5.sp)
-                        Spacer(Modifier.height(6.dp))
-                        Text("OFFLINE AUDIO", color = AuralisColors.PrimaryViolet, fontSize = AuralisTypeScale.Overline, letterSpacing = 3.sp)
-                        Spacer(Modifier.height(AuralisSpacing.X8 + AuralisSpacing.X2))
-                        Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge, color = AuralisColors.Surface) {
-                            Column(Modifier.padding(AuralisSpacing.X6), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("پخش‌کنندهٔ آفلاین", color = AuralisColors.TextPrimary, fontSize = AuralisTypeScale.TitleLargeMin, fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.height(16.dp))
-                                Text(selectedTitle, color = AuralisColors.TextPrimary, textAlign = TextAlign.Center, fontSize = AuralisTypeScale.BodyMedium)
-                                Spacer(Modifier.height(10.dp))
-                                Text(status, color = AuralisColors.TextSecondary, textAlign = TextAlign.Center, fontSize = AuralisTypeScale.BodyMedium)
-                                Spacer(Modifier.height(24.dp))
-                                Button(onClick = { openAudio.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryBlue, contentColor = AuralisColors.BackgroundDeep)) { Text("انتخاب فایل صوتی") }
-                                Spacer(Modifier.height(12.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Button(onClick = { togglePlayback() }, colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryViolet, contentColor = AuralisColors.BackgroundDeep)) { Text(if (isPlaying) "مکث" else "ادامهٔ پخش") }
-                                    Button(onClick = {
-                                        controller?.stop()
-                                        isPlaying = false
-                                        status = "پخش متوقف شد"
-                                    }, colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.SurfaceElevated)) { Text("توقف") }
+                    Box(Modifier.fillMaxSize().background(background)) {
+                        Column(Modifier.fillMaxSize().padding(AuralisSpacing.X6), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text("AURALIS", color = AuralisColors.AccentCyan, fontSize = AuralisTypeScale.HeroMax, fontWeight = FontWeight.Black, letterSpacing = 5.sp)
+                            Spacer(Modifier.height(6.dp))
+                            Text("OFFLINE AUDIO", color = AuralisColors.PrimaryViolet, fontSize = AuralisTypeScale.Overline, letterSpacing = 3.sp)
+                            Spacer(Modifier.height(AuralisSpacing.X8 + AuralisSpacing.X2))
+                            Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge, color = AuralisColors.Surface) {
+                                Column(Modifier.padding(AuralisSpacing.X6), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("پخش‌کنندهٔ آفلاین", color = AuralisColors.TextPrimary, fontSize = AuralisTypeScale.TitleLargeMin, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.height(16.dp))
+                                    Text(selectedTitle, color = AuralisColors.TextPrimary, textAlign = TextAlign.Center, fontSize = AuralisTypeScale.BodyMedium)
+                                    Spacer(Modifier.height(10.dp))
+                                    Text(status, color = AuralisColors.TextSecondary, textAlign = TextAlign.Center, fontSize = AuralisTypeScale.BodyMedium)
+                                    Spacer(Modifier.height(24.dp))
+                                    Button(onClick = { openAudio.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryBlue, contentColor = AuralisColors.BackgroundDeep)) { Text("انتخاب فایل صوتی") }
+                                    Spacer(Modifier.height(12.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Button(onClick = { togglePlayback() }, colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryViolet, contentColor = AuralisColors.BackgroundDeep)) { Text(if (isPlaying) "مکث" else "ادامهٔ پخش") }
+                                        Button(onClick = {
+                                            controller?.stop()
+                                            isPlaying = false
+                                            status = "پخش متوقف شد"
+                                        }, colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.SurfaceElevated)) { Text("توقف") }
+                                    }
                                 }
                             }
+                            Spacer(Modifier.height(22.dp))
+                            Text("نسخهٔ آزمایشی · بدون سرور و حساب کاربری", color = AuralisColors.TextSecondary, fontSize = AuralisTypeScale.Caption, textAlign = TextAlign.Center)
                         }
-                        Spacer(Modifier.height(22.dp))
-                        Text("نسخهٔ آزمایشی · بدون سرور و حساب کاربری", color = AuralisColors.TextSecondary, fontSize = AuralisTypeScale.Caption, textAlign = TextAlign.Center)
                         if (miniPlayerVisible) {
-                            Spacer(Modifier.weight(1f))
+                            // Overlays the bottom of the window instead of reserving layout height,
+                            // so this change adds no height pressure to a column that was already
+                            // non-scrollable: on tall screens the centred content clears the bar
+                            // entirely, and on short screens the layout is exactly what it was before.
                             AuralisMiniPlayer(
                                 title = trackTitle,
                                 state = miniState,
                                 showPauseAction = showPauseAction,
                                 onPlayPause = { togglePlayback() },
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(AuralisSpacing.X6),
                             )
                         }
                     }
