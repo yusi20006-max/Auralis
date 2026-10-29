@@ -95,6 +95,23 @@ class MainActivity : ComponentActivity() {
         return fileNameFromDocumentPath(resolved.lastPathSegment)
     }
 
+    private fun resolveDisplayNameOffMain(uri: Uri?): String? {
+        val resolved = uri ?: return null
+        if (resolved.scheme == "content") {
+            try {
+                contentResolver
+                    .query(resolved, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                    ?.use { cursor ->
+                        val column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (column != -1 && cursor.moveToFirst()) {
+                            cursor.getString(column)?.takeIf { it.isNotBlank() }
+                        } else null
+                    }?.let { return it }
+            } catch (_: Exception) { }
+        }
+        return fileNameFromDocumentPath(resolved.lastPathSegment)
+    }
+
     private fun resolveDisplayNameOffMain(uri: Uri?, onResolved: (String?) -> Unit) {
         lifecycleScope.launch(Dispatchers.IO) {
             val name = displayNameFor(uri)
@@ -182,6 +199,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        requestNotificationPermissionIfNeeded()
         libraryRepository = LibraryRepository(applicationContext)
         playbackPreferences = PlaybackPreferences(applicationContext)
 
