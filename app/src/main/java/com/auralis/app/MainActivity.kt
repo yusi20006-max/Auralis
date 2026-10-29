@@ -9,6 +9,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -129,7 +131,7 @@ class MainActivity : ComponentActivity() {
             player.playWhenReady = true
             player.play()
             libraryRepository.setCurrentEpisode(episode.id)
-        } catch (error: RuntimeException) {
+        } catch (_: RuntimeException) {
             hasPlayerError = true
         }
     }
@@ -220,7 +222,6 @@ class MainActivity : ComponentActivity() {
                         }
                     })
 
-                    // Position ticker
                     lifecycleScope.launch {
                         while (isActive) {
                             val c = controller
@@ -237,7 +238,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-            } catch (error: ExecutionException) {
+            } catch (_: ExecutionException) {
                 hasPlayerError = true
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
@@ -282,6 +283,7 @@ class MainActivity : ComponentActivity() {
                             bottomBar = {
                                 Column {
                                     if (miniPlayerVisible) {
+                                        val interactionSource = remember { MutableInteractionSource() }
                                         AuralisMiniPlayer(
                                             title = trackTitle,
                                             state = miniState,
@@ -290,7 +292,11 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(horizontal = AuralisSpacing.X4, vertical = AuralisSpacing.X2)
-                                                .clickableNoRipple { showNowPlaying = true },
+                                                .clickable(
+                                                    interactionSource = interactionSource,
+                                                    indication = null,
+                                                    onClick = { showNowPlaying = true },
+                                                ),
                                         )
                                     }
                                     NavigationBar(containerColor = AuralisColors.Surface) {
@@ -299,39 +305,21 @@ class MainActivity : ComponentActivity() {
                                             onClick = { currentDestination = AuralisDestination.Library },
                                             icon = { Text("📚", fontSize = AuralisTypeScale.BodyLarge) },
                                             label = { Text("کتابخانه", fontSize = AuralisTypeScale.Caption) },
-                                            colors = NavigationBarItemDefaults.colors(
-                                                selectedIconColor = AuralisColors.PrimaryBlue,
-                                                selectedTextColor = AuralisColors.PrimaryBlue,
-                                                indicatorColor = AuralisColors.SurfaceElevated,
-                                                unselectedIconColor = AuralisColors.TextTertiary,
-                                                unselectedTextColor = AuralisColors.TextTertiary,
-                                            ),
+                                            colors = navColors(),
                                         )
                                         NavigationBarItem(
                                             selected = currentDestination == AuralisDestination.Explore,
                                             onClick = { currentDestination = AuralisDestination.Explore },
                                             icon = { Text("🔍", fontSize = AuralisTypeScale.BodyLarge) },
                                             label = { Text("کشف", fontSize = AuralisTypeScale.Caption) },
-                                            colors = NavigationBarItemDefaults.colors(
-                                                selectedIconColor = AuralisColors.PrimaryBlue,
-                                                selectedTextColor = AuralisColors.PrimaryBlue,
-                                                indicatorColor = AuralisColors.SurfaceElevated,
-                                                unselectedIconColor = AuralisColors.TextTertiary,
-                                                unselectedTextColor = AuralisColors.TextTertiary,
-                                            ),
+                                            colors = navColors(),
                                         )
                                         NavigationBarItem(
                                             selected = currentDestination == AuralisDestination.Profile,
                                             onClick = { currentDestination = AuralisDestination.Profile },
                                             icon = { Text("👤", fontSize = AuralisTypeScale.BodyLarge) },
                                             label = { Text("پروفایل", fontSize = AuralisTypeScale.Caption) },
-                                            colors = NavigationBarItemDefaults.colors(
-                                                selectedIconColor = AuralisColors.PrimaryBlue,
-                                                selectedTextColor = AuralisColors.PrimaryBlue,
-                                                indicatorColor = AuralisColors.SurfaceElevated,
-                                                unselectedIconColor = AuralisColors.TextTertiary,
-                                                unselectedTextColor = AuralisColors.TextTertiary,
-                                            ),
+                                            colors = navColors(),
                                         )
                                     }
                                 }
@@ -339,7 +327,9 @@ class MainActivity : ComponentActivity() {
                         ) { padding ->
                             Box(Modifier.padding(padding).fillMaxSize()) {
                                 when (currentDestination) {
-                                    AuralisDestination.Library -> {
+                                    AuralisDestination.Library,
+                                    AuralisDestination.NowPlaying,
+                                    AuralisDestination.EpisodeDetail -> {
                                         LibraryScreen(
                                             episodes = episodes,
                                             onEpisodeClick = { episode ->
@@ -355,17 +345,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                     AuralisDestination.Profile -> {
                                         PlaceholderScreen(title = "پروفایل", subtitle = "به زودی")
-                                    }
-                                    else -> {
-                                        LibraryScreen(
-                                            episodes = episodes,
-                                            onEpisodeClick = { episode ->
-                                                libraryRepository.setCurrentEpisode(episode.id)
-                                                playEpisode(episode)
-                                                showNowPlaying = true
-                                            },
-                                            onImportClick = { openAudio.launch(arrayOf("audio/*")) },
-                                        )
                                     }
                                 }
                             }
@@ -384,6 +363,15 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
+
+@Composable
+private fun navColors() = NavigationBarItemDefaults.colors(
+    selectedIconColor = AuralisColors.PrimaryBlue,
+    selectedTextColor = AuralisColors.PrimaryBlue,
+    indicatorColor = AuralisColors.SurfaceElevated,
+    unselectedIconColor = AuralisColors.TextTertiary,
+    unselectedTextColor = AuralisColors.TextTertiary,
+)
 
 @Composable
 private fun PlaceholderScreen(title: String, subtitle: String) {
@@ -409,13 +397,3 @@ private fun PlaceholderScreen(title: String, subtitle: String) {
         }
     }
 }
-
-@Composable
-private fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier =
-    this.then(
-        androidx.compose.foundation.clickable(
-            indication = null,
-            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-            onClick = onClick,
-        )
-    )
