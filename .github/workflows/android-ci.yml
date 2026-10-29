@@ -16,7 +16,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Install brand launcher icons from user logo
+      - name: Install brand launcher icons
         run: sh scripts/install-brand-icons.sh
       - name: Ensure Gradle Wrapper JAR
         run: |
@@ -33,10 +33,19 @@ jobs:
         run: ./gradlew --no-daemon :app:testDebugUnitTest --continue
       - name: Build debug APK
         run: ./gradlew --no-daemon :app:assembleDebug
+      - name: Build signed release APK (debug keystore fallback)
+        run: ./gradlew --no-daemon :app:assembleRelease
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: auralis-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: auralis-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
