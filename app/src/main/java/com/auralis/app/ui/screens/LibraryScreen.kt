@@ -1,7 +1,8 @@
 package com.auralis.app.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,11 +17,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,9 +46,12 @@ import com.auralis.app.ui.theme.AuralisTypeScale
 fun LibraryScreen(
     episodes: List<Episode>,
     onEpisodeClick: (Episode) -> Unit,
+    onEpisodeDelete: (Episode) -> Unit,
     onImportClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var pendingDelete by remember { mutableStateOf<Episode?>(null) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -90,23 +100,55 @@ fun LibraryScreen(
                     EpisodeListItem(
                         episode = episode,
                         onClick = { onEpisodeClick(episode) },
+                        onLongClick = { pendingDelete = episode },
                     )
                 }
             }
         }
     }
+
+    pendingDelete?.let { episode ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("حذف اپیزود") },
+            text = { Text("«${episode.title}» از کتابخانه حذف شود؟") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onEpisodeDelete(episode)
+                        pendingDelete = null
+                    },
+                ) {
+                    Text("حذف", color = AuralisColors.Error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) {
+                    Text("انصراف")
+                }
+            },
+            containerColor = AuralisColors.Surface,
+            titleContentColor = AuralisColors.TextPrimary,
+            textContentColor = AuralisColors.TextSecondary,
+        )
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EpisodeListItem(
     episode: Episode,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(AuralisCorners.Card))
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
         color = AuralisColors.Surface,
         shape = RoundedCornerShape(AuralisCorners.Card),
     ) {
@@ -155,6 +197,11 @@ private fun EpisodeListItem(
                         )
                     }
                 }
+                Text(
+                    text = "نگه داشتن برای حذف",
+                    color = AuralisColors.TextTertiary,
+                    fontSize = AuralisTypeScale.Overline,
+                )
             }
         }
     }

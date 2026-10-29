@@ -6,28 +6,34 @@
 - [x] Define initial product scope.
 - [x] Record provisional brand direction.
 - [x] Outline offline-first architecture.
+- [x] Create a baseline Android build and CI workflow.
 - [ ] Add the approved logo source asset and document its origin.
-- [ ] Inspect YasinCast source, issues, and tests as a reuse candidate.
 - [ ] Decide final Android application ID before public distribution.
-- [ ] Create a baseline Android build and CI workflow.
+- [ ] Add Gradle Wrapper for reproducible local builds.
 
 ## Phase 1 — Offline MVP
 
-- [ ] Import local audio through Android's file picker.
-- [ ] Build the library and episode information model.
-- [ ] Implement persistent playback service and media session.
-- [ ] Implement player screen and essential controls.
-- [ ] Persist playback position and recent history.
-- [ ] Apply the Auralis design system and Persian RTL layout.
-- [ ] Add accessibility, error handling, and automated tests.
-- [ ] Test on a real Android device, including screen-off playback.
+- [x] Import local audio through Android's file picker.
+- [x] Build the library and episode information model (Room).
+- [x] Implement persistent playback service and media session (Media3).
+- [x] Implement player screen and essential controls (seek, ±15s, speed).
+- [x] Persist playback position and library list.
+- [x] Apply the Auralis design system and Persian RTL layout.
+- [x] Mini player, Explore / Profile / Settings shells.
+- [x] Device smoke-test by project owner (basic playback path).
+- [x] Episode delete from library.
+- [ ] Bundle Vazirmatn (or approved Persian typeface).
+- [ ] App icon / adaptive icon in `res/`.
+- [ ] Stronger accessibility (TalkBack labels, large font stress test).
+- [ ] Broader automated UI / integration tests.
 
 ## Phase 2 — Hardening
 
 - [ ] Test small screens, large fonts, orientation changes, and TalkBack.
 - [ ] Test Bluetooth/headset controls, audio focus, interruptions, and notification behavior.
 - [ ] Measure startup, scrolling, memory use, and playback responsiveness.
-- [ ] Produce a signed test build and document installation.
+- [ ] Produce a signed release/test build and document installation.
+- [ ] Error recovery UX when a URI grant is lost or file is missing.
 
 ## Phase 3 — Hosted podcast catalog
 

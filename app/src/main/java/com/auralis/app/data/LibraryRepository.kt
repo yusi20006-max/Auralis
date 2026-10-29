@@ -62,6 +62,15 @@ class LibraryRepository(context: Context) {
         }
     }
 
+    fun deleteEpisode(episodeId: String) {
+        scope.launch {
+            dao.delete(episodeId)
+            if (_currentEpisodeId.value == episodeId) {
+                _currentEpisodeId.value = null
+            }
+        }
+    }
+
     fun setCurrentEpisode(id: String?) {
         _currentEpisodeId.value = id
     }
