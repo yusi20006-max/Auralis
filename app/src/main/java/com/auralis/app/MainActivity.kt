@@ -21,12 +21,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.google.common.util.concurrent.ListenableFuture
 import java.util.concurrent.ExecutionException
 import com.auralis.app.ui.components.AuralisMiniPlayer
@@ -88,6 +92,18 @@ class MainActivity : ComponentActivity() {
         return fileNameFromDocumentPath(resolved.lastPathSegment)
     }
 
+    /**
+     * Resolves a document display name off the main thread and applies it on the main thread, so a
+     * slow provider cannot freeze the picker callback, the attach listener or a media-item
+     * transition while the user is trying to use the app.
+     */
+    private fun resolveDisplayNameOffMain(uri: Uri?, onResolved: (String?) -> Unit) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val name = displayNameFor(uri)
+            withContext(Dispatchers.Main) { onResolved(name) }
+        }
+    }
+
     private val openAudio = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
             try {
@@ -98,7 +114,7 @@ class MainActivity : ComponentActivity() {
                 // Some document providers do not offer persistable grants.
             }
             pendingUri = uri
-            selectedTitle = displayNameFor(uri) ?: "فایل صوتی انتخاب‌شده"
+            resolveDisplayNameOffMain(uri) { name -> selectedTitle = name ?: "فایل صوتی انتخاب‌شده" }
             startSelectedFileIfReady()
         }
     }
@@ -143,6 +159,7 @@ class MainActivity : ComponentActivity() {
                 // can keep playWhenReady true while the player reports ENDED.
                 it.seekToDefaultPosition()
                 it.play()
+                hasPlayerError = false
                 status = "درخواست ادامهٔ پخش ارسال شد…"
             } else if (it.isPlaying || (it.playWhenReady && it.playbackState == Player.STATE_BUFFERING)) {
                 // Same condition the bar uses to show the pause glyph, so the action can never
@@ -157,6 +174,7 @@ class MainActivity : ComponentActivity() {
                     it.prepare()
                 }
                 it.play()
+                hasPlayerError = false
                 status = "درخواست ادامهٔ پخش ارسال شد…"
             } else {
                 startSelectedFileIfReady()
@@ -182,7 +200,9 @@ class MainActivity : ComponentActivity() {
                     playerState = connected.playbackState
                     playWhenReady = connected.playWhenReady
                     hasMediaItem = connected.currentMediaItem != null
-                    attachedFileName = displayNameFor(connected.currentMediaItem?.localConfiguration?.uri)
+                    connected.currentMediaItem?.localConfiguration?.uri?.let { attachedUri ->
+                        resolveDisplayNameOffMain(attachedUri) { name -> attachedFileName = name }
+                    }
                     sessionTitle = connected.mediaMetadata.title
                         ?.toString()
                         ?.takeIf { it.isNotBlank() }
@@ -225,7 +245,9 @@ class MainActivity : ComponentActivity() {
 
                     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                         hasMediaItem = mediaItem != null
-                        attachedFileName = displayNameFor(mediaItem?.localConfiguration?.uri)
+                        mediaItem?.localConfiguration?.uri?.let { attachedUri ->
+                            resolveDisplayNameOffMain(attachedUri) { name -> attachedFileName = name }
+                        }
                         sessionTitle = mediaItem?.mediaMetadata?.title
                             ?.toString()
                             ?.takeIf { it.isNotBlank() }
