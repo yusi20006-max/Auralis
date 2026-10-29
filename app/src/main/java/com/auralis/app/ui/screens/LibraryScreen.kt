@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.auralis.app.data.Episode
+import com.auralis.app.ui.components.AuralisEmptyState
 import com.auralis.app.ui.theme.AuralisColors
 import com.auralis.app.ui.theme.AuralisCorners
 import com.auralis.app.ui.theme.AuralisSpacing
@@ -60,7 +61,14 @@ fun LibraryScreen(
         }
 
         if (episodes.isEmpty()) {
-            EmptyLibraryState(onImportClick = onImportClick)
+            Box(Modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                AuralisEmptyState(
+                    title = "هنوز چیزی ذخیره نکرده‌اید",
+                    subtitle = "فایل‌های صوتی پادکست‌های AI را از حافظه گوشی اضافه کنید و آفلاین گوش دهید.",
+                    actionLabel = "افزودن فایل صوتی",
+                    onAction = onImportClick,
+                )
+            }
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(AuralisSpacing.X3),
@@ -135,41 +143,6 @@ private fun EpisodeListItem(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun EmptyLibraryState(onImportClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(AuralisSpacing.X8),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            text = "هنوز چیزی ذخیره نکرده‌اید",
-            color = AuralisColors.TextPrimary,
-            fontSize = AuralisTypeScale.TitleMediumMax,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(Modifier.height(AuralisSpacing.X3))
-        Text(
-            text = "پادکست‌های مورد علاقه‌تان را اضافه کنید",
-            color = AuralisColors.TextSecondary,
-            fontSize = AuralisTypeScale.BodyMedium,
-        )
-        Spacer(Modifier.height(AuralisSpacing.X6))
-        Button(
-            onClick = onImportClick,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = AuralisColors.PrimaryBlue,
-                contentColor = AuralisColors.BackgroundDeep,
-            ),
-            shape = RoundedCornerShape(AuralisCorners.Button),
-        ) {
-            Text("افزودن فایل صوتی")
         }
     }
 }
