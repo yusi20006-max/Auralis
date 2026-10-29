@@ -61,8 +61,9 @@ fun SettingsScreen(
                     fontSize = AuralisTypeScale.BodyMedium,
                     fontWeight = FontWeight.Medium,
                 )
+                val speedLabel = String.format("%.1fx", playbackSpeed)
                 Text(
-                    text = "${\"%.1f\".format(playbackSpeed)}x",
+                    text = speedLabel,
                     color = AuralisColors.PrimaryBlue,
                     fontSize = AuralisTypeScale.Caption,
                 )
@@ -96,7 +97,7 @@ fun SettingsScreen(
                 title = "تم تیره",
                 subtitle = "Auralis فقط تم تیره پشتیبانی می‌کند",
                 checked = darkTheme,
-                onCheckedChange = { /* locked to dark */ },
+                onCheckedChange = { /* locked to dark for MVP */ },
             )
         }
 
