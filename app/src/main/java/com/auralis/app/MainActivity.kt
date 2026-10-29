@@ -17,8 +17,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
@@ -290,6 +292,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val background = Brush.verticalGradient(listOf(AuralisColors.BackgroundDeep, AuralisColors.Surface, AuralisColors.BackgroundDeep))
+            val systemDensity = LocalDensity.current
+            CompositionLocalProvider(
+                LocalDensity provides Density(density = systemDensity.density, fontScale = 1f),
+            ) {
             AuralisTheme {
                 LaunchedEffect(controller, hasMediaItem) {
                     while (true) {
@@ -395,6 +401,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+            }
             }
         }
     }
