@@ -114,7 +114,14 @@ class MainActivity : ComponentActivity() {
                 // Some document providers do not offer persistable grants.
             }
             pendingUri = uri
-            resolveDisplayNameOffMain(uri) { name -> selectedTitle = name ?: "فایل صوتی انتخاب‌شده" }
+            val requestedUri = uri
+            resolveDisplayNameOffMain(requestedUri) { name ->
+                // Apply only the result that still belongs to the URI just picked; a later pick
+                // must not let an older query overwrite the display name it started.
+                if (pendingUri == requestedUri) {
+                    selectedTitle = name ?: "فایل صوتی انتخاب‌شده"
+                }
+            }
             startSelectedFileIfReady()
         }
     }
