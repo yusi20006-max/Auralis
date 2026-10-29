@@ -16,7 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
@@ -27,8 +27,12 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.auralis.app.data.Episode
 import com.auralis.app.data.LibraryRepository
+import com.auralis.app.data.PlaybackPreferences
 import com.auralis.app.ui.components.AuralisMiniPlayer
+import com.auralis.app.ui.components.ExploreNavIcon
+import com.auralis.app.ui.components.LibraryNavIcon
 import com.auralis.app.ui.components.MiniPlayerUiState
+import com.auralis.app.ui.components.ProfileNavIcon
 import com.auralis.app.ui.components.fileNameFromDocumentPath
 import com.auralis.app.ui.components.resolveMiniPlayerTitle
 import com.auralis.app.ui.components.resolveMiniPlayerUiState
@@ -53,6 +57,7 @@ import java.util.concurrent.ExecutionException
 class MainActivity : ComponentActivity() {
 
     private lateinit var libraryRepository: LibraryRepository
+    private lateinit var playbackPreferences: PlaybackPreferences
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
@@ -109,6 +114,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun applyPlaybackSpeed(speed: Float) {
+        controller?.setPlaybackSpeed(speed.coerceIn(0.5f, 2.0f))
+    }
+
     private fun playEpisode(episode: Episode) {
         val player = controller ?: return
         val uri = episode.localUri ?: return
@@ -132,6 +141,7 @@ class MainActivity : ComponentActivity() {
             if (episode.lastPositionMs > 0) {
                 player.seekTo(episode.lastPositionMs)
             }
+            applyPlaybackSpeed(playbackPreferences.speed.value)
             player.playWhenReady = true
             player.play()
             libraryRepository.setCurrentEpisode(episode.id)
@@ -170,6 +180,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         libraryRepository = LibraryRepository(applicationContext)
+        playbackPreferences = PlaybackPreferences(applicationContext)
 
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val future = MediaController.Builder(this, token).buildAsync()
@@ -186,6 +197,7 @@ class MainActivity : ComponentActivity() {
                     hasMediaItem = connected.currentMediaItem != null
                     durationMs = connected.duration.coerceAtLeast(0L)
                     positionMs = connected.currentPosition.coerceAtLeast(0L)
+                    applyPlaybackSpeed(playbackPreferences.speed.value)
 
                     connected.currentMediaItem?.localConfiguration?.uri?.let { uri ->
                         resolveDisplayNameOffMain(uri) { name -> attachedFileName = name }
@@ -215,6 +227,7 @@ class MainActivity : ComponentActivity() {
                                 resolveDisplayNameOffMain(uri) { name -> attachedFileName = name }
                             }
                             sessionTitle = mediaItem?.mediaMetadata?.title?.toString()?.takeIf { it.isNotBlank() }
+                            applyPlaybackSpeed(playbackPreferences.speed.value)
                         }
 
                         override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
@@ -255,6 +268,7 @@ class MainActivity : ComponentActivity() {
                 val episodes by libraryRepository.episodes.collectAsState()
                 val currentEpisodeId by libraryRepository.currentEpisodeId.collectAsState()
                 val currentEpisode = episodes.find { it.id == currentEpisodeId }
+                val playbackSpeed by playbackPreferences.speed.collectAsState()
 
                 val miniState = resolveMiniPlayerUiState(
                     hasMediaItem = hasMediaItem,
@@ -285,7 +299,14 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         showSettings -> {
-                            SettingsScreen(onBack = { showSettings = false })
+                            SettingsScreen(
+                                playbackSpeed = playbackSpeed,
+                                onSpeedChange = { speed ->
+                                    playbackPreferences.setSpeed(speed)
+                                    applyPlaybackSpeed(speed)
+                                },
+                                onBack = { showSettings = false },
+                            )
                         }
                         else -> {
                             Scaffold(
@@ -313,21 +334,33 @@ class MainActivity : ComponentActivity() {
                                             NavigationBarItem(
                                                 selected = currentDestination == AuralisDestination.Library,
                                                 onClick = { currentDestination = AuralisDestination.Library },
-                                                icon = { Text("📚", fontSize = AuralisTypeScale.BodyLarge) },
+                                                icon = {
+                                                    LibraryNavIcon(
+                                                        color = navIconColor(currentDestination == AuralisDestination.Library),
+                                                    )
+                                                },
                                                 label = { Text("کتابخانه", fontSize = AuralisTypeScale.Caption) },
                                                 colors = navColors(),
                                             )
                                             NavigationBarItem(
                                                 selected = currentDestination == AuralisDestination.Explore,
                                                 onClick = { currentDestination = AuralisDestination.Explore },
-                                                icon = { Text("🔍", fontSize = AuralisTypeScale.BodyLarge) },
+                                                icon = {
+                                                    ExploreNavIcon(
+                                                        color = navIconColor(currentDestination == AuralisDestination.Explore),
+                                                    )
+                                                },
                                                 label = { Text("کشف", fontSize = AuralisTypeScale.Caption) },
                                                 colors = navColors(),
                                             )
                                             NavigationBarItem(
                                                 selected = currentDestination == AuralisDestination.Profile,
                                                 onClick = { currentDestination = AuralisDestination.Profile },
-                                                icon = { Text("👤", fontSize = AuralisTypeScale.BodyLarge) },
+                                                icon = {
+                                                    ProfileNavIcon(
+                                                        color = navIconColor(currentDestination == AuralisDestination.Profile),
+                                                    )
+                                                },
                                                 label = { Text("پروفایل", fontSize = AuralisTypeScale.Caption) },
                                                 colors = navColors(),
                                             )
@@ -379,6 +412,9 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
+
+private fun navIconColor(selected: Boolean): Color =
+    if (selected) AuralisColors.PrimaryBlue else AuralisColors.TextTertiary
 
 @Composable
 private fun navColors() = NavigationBarItemDefaults.colors(
