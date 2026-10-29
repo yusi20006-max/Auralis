@@ -4,8 +4,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 
 private val AuralisDarkColorScheme = darkColorScheme(
@@ -64,12 +67,17 @@ private val AuralisTypography = Typography(
     ),
 )
 
+/**
+ * Auralis theme: always dark + forced RTL for Persian UI.
+ */
 @Composable
 fun AuralisTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = AuralisDarkColorScheme,
-        typography = AuralisTypography,
-        shapes = AuralisShapes,
-        content = content,
-    )
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        MaterialTheme(
+            colorScheme = AuralisDarkColorScheme,
+            typography = AuralisTypography,
+            shapes = AuralisShapes,
+            content = content,
+        )
+    }
 }
