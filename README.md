@@ -18,47 +18,40 @@ The first release focuses on a polished, reliable local listening experience. A 
 | Area | Status |
 |------|--------|
 | Library (import local audio) | Done |
-| Now Playing (seek, ±15s, waveform) | Done |
-| Playback speed (Now Playing + Settings → Media3) | Done |
+| Now Playing (seek, ±15s, waveform, speed) | Done |
 | Mini Player + bottom navigation | Done |
-| Explore (categories + placeholders) | Done |
-| Profile + Settings | Done |
-| Room persistence (episodes + position) | Done |
-| RTL layout (forced) | Done |
+| Explore / Profile / Settings | Done |
+| Room persistence + episode delete | Done |
+| RTL layout | Done |
 | Media3 background service | Done |
+| Adaptive app icon | Done |
+| Gradle Wrapper | Done (bootstrap JAR if needed) |
 | Hosted catalog / streaming | Planned |
 | Vazirmatn bundled font | Planned |
-
-## Device test checklist
-
-1. Install debug APK from CI Artifacts (`auralis-debug-apk`).
-2. Open **کتابخانه** → empty state → **افزودن فایل صوتی**.
-3. Pick an MP3/M4A → playback starts → Now Playing opens.
-4. Pause / resume from Now Playing and from Mini Player.
-5. Seek with slider; use −۱۵ / +۱۵.
-6. Change speed chips (`0.75x` … `2x`) and confirm audio rate changes.
-7. Leave app / lock screen → notification controls still work.
-8. Force-stop and reopen → library list and last position restore.
-9. Check RTL: titles, bottom bar labels, and buttons align right-to-left.
-10. Open **کشف** and **پروفایل** → **تنظیمات** → speed slider matches Now Playing.
 
 ## Build
 
 ```bash
-gradle :app:assembleDebug
-# or with wrapper once present:
-# ./gradlew :app:assembleDebug
+# First clone — fetch wrapper JAR if missing
+sh scripts/bootstrap-wrapper.sh
+
+./gradlew :app:assembleDebug
 ```
 
-CI: `.github/workflows/android-ci.yml` runs unit tests and uploads the debug APK.
+Debug APK: `app/build/outputs/apk/debug/app-debug.apk`  
+CI also uploads Artifact `auralis-debug-apk` on each green `main` run.
 
-## Planned phases
+## Device test checklist
 
-1. Define product scope, brand, architecture, and acceptance criteria.
-2. Build the offline Android MVP. ← **in progress / largely complete on main**
-3. Validate playback and UI on real Android devices.
-4. Add a hosted episode catalog, streaming, and offline downloads.
-5. Add publishing/admin workflows only when they are actually needed.
+1. Install debug APK from CI Artifacts (`auralis-debug-apk`).
+2. Confirm launcher shows the Auralis icon.
+3. Open **کتابخانه** → empty state → **افزودن فایل صوتی**.
+4. Pick an MP3/M4A → playback starts → Now Playing opens.
+5. Pause / resume from Now Playing and Mini Player.
+6. Seek; use −۱۵ / +۱۵; change speed chips.
+7. Long-press an episode → delete confirm.
+8. Leave app / lock screen → notification controls.
+9. Force-stop and reopen → library + position restore.
 
 ## Documentation
 

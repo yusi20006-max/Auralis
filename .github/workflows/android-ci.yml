@@ -16,13 +16,21 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      - name: Ensure Gradle Wrapper JAR
+        run: |
+          mkdir -p gradle/wrapper
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \
+              "https://raw.githubusercontent.com/gradle/gradle/v8.13.0/gradle/wrapper/gradle-wrapper.jar"
+          fi
+          chmod +x gradlew
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
       - name: Run unit tests
-        run: gradle --no-daemon :app:testDebugUnitTest --continue
+        run: ./gradlew --no-daemon :app:testDebugUnitTest --continue
       - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
+        run: ./gradlew --no-daemon :app:assembleDebug
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

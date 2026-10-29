@@ -7,9 +7,10 @@
 - [x] Record provisional brand direction.
 - [x] Outline offline-first architecture.
 - [x] Create a baseline Android build and CI workflow.
-- [ ] Add the approved logo source asset and document its origin.
+- [x] Adaptive app icon (vector A + brand colors).
+- [x] Gradle Wrapper scripts + properties (JAR bootstrapped in CI / `scripts/bootstrap-wrapper.sh`).
+- [ ] Commit logo source asset and document its origin.
 - [ ] Decide final Android application ID before public distribution.
-- [ ] Add Gradle Wrapper for reproducible local builds.
 
 ## Phase 1 — Offline MVP
 
@@ -23,7 +24,6 @@
 - [x] Device smoke-test by project owner (basic playback path).
 - [x] Episode delete from library.
 - [ ] Bundle Vazirmatn (or approved Persian typeface).
-- [ ] App icon / adaptive icon in `res/`.
 - [ ] Stronger accessibility (TalkBack labels, large font stress test).
 - [ ] Broader automated UI / integration tests.
 
