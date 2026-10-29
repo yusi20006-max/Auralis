@@ -18,10 +18,11 @@ import com.auralis.app.ui.theme.AuralisTypeScale
 
 @Composable
 fun SettingsScreen(
+    playbackSpeed: Float,
+    onSpeedChange: (Float) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
     var notificationsEnabled by remember { mutableStateOf(true) }
     var darkTheme by remember { mutableStateOf(true) }
 
@@ -69,7 +70,7 @@ fun SettingsScreen(
                 )
                 Slider(
                     value = playbackSpeed,
-                    onValueChange = { playbackSpeed = it },
+                    onValueChange = onSpeedChange,
                     valueRange = 0.5f..2.0f,
                     steps = 5,
                     colors = SliderDefaults.colors(
