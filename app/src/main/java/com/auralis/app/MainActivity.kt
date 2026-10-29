@@ -122,7 +122,9 @@ class MainActivity : ComponentActivity() {
 
     private fun playEpisode(episode: Episode) {
         val player = controller ?: return
-        val uri = episode.localUri ?: return
+        val uri = episode.localUri
+            ?: episode.audioUrl?.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
+            ?: return
         try {
             hasPlayerError = false
             player.pause()
@@ -411,6 +413,16 @@ class MainActivity : ComponentActivity() {
                                             AuralisDestination.Explore -> {
                                                 ExploreScreen(
                                                     onImportClick = { openAudio.launch(arrayOf("audio/*")) },
+                                                    onStreamEpisode = { podcast, catalogEpisode ->
+                                                        if (catalogEpisode.audioUrl.isBlank()) return@ExploreScreen
+                                                        val episode = libraryRepository.addOrGetStreamEpisode(
+                                                            catalogEpisode = catalogEpisode,
+                                                            podcast = podcast,
+                                                        )
+                                                        libraryRepository.setCurrentEpisode(episode.id)
+                                                        playEpisode(episode)
+                                                        showNowPlaying = true
+                                                    },
                                                 )
                                             }
                                             AuralisDestination.Profile -> {
