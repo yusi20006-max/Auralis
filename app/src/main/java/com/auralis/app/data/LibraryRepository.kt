@@ -1,20 +1,33 @@
 package com.auralis.app.data
 
+import android.content.Context
 import android.net.Uri
+import com.auralis.app.data.db.AuralisDatabase
+import com.auralis.app.data.db.EpisodeEntity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.util.UUID
 
 /**
- * Simple in-memory library for the offline MVP.
- * Can be replaced with Room later without changing the UI layer.
+ * Library repository backed by Room.
+ * UI observes [episodes] and [currentEpisodeId] as StateFlows.
  */
-class LibraryRepository {
+class LibraryRepository(context: Context) {
 
-    private val _episodes = MutableStateFlow<List<Episode>>(emptyList())
-    val episodes: StateFlow<List<Episode>> = _episodes.asStateFlow()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val dao = AuralisDatabase.get(context).episodeDao()
+
+    val episodes: StateFlow<List<Episode>> = dao.observeAll()
+        .map { list -> list.map { it.toEpisode() } }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _currentEpisodeId = MutableStateFlow<String?>(null)
     val currentEpisodeId: StateFlow<String?> = _currentEpisodeId.asStateFlow()
@@ -34,21 +47,19 @@ class LibraryRepository {
             localUri = uri,
             isAiGenerated = true,
         )
-        _episodes.update { current ->
-            // Avoid exact duplicate URIs
-            if (current.any { it.localUri == uri }) current else listOf(episode) + current
+        scope.launch {
+            // Skip exact URI duplicates
+            val existing = episodes.value.find { it.localUri == uri }
+            if (existing == null) {
+                dao.upsert(EpisodeEntity.from(episode))
+            }
         }
         return episode
     }
 
     fun updatePosition(episodeId: String, positionMs: Long) {
-        _episodes.update { list ->
-            list.map {
-                if (it.id == episodeId) it.copy(
-                    lastPositionMs = positionMs,
-                    lastPlayedAt = System.currentTimeMillis()
-                ) else it
-            }
+        scope.launch {
+            dao.updatePosition(episodeId, positionMs, System.currentTimeMillis())
         }
     }
 
@@ -56,8 +67,8 @@ class LibraryRepository {
         _currentEpisodeId.value = id
     }
 
-    fun getEpisode(id: String): Episode? = _episodes.value.find { it.id == id }
+    fun getEpisode(id: String): Episode? = episodes.value.find { it.id == id }
 
     fun getCurrentEpisode(): Episode? =
-        _currentEpisodeId.value?.let { id -> _episodes.value.find { it.id == id } }
+        _currentEpisodeId.value?.let { id -> episodes.value.find { it.id == id } }
 }

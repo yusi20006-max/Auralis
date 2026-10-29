@@ -49,7 +49,7 @@ import java.util.concurrent.ExecutionException
 
 class MainActivity : ComponentActivity() {
 
-    private val libraryRepository = LibraryRepository()
+    private lateinit var libraryRepository: LibraryRepository
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
@@ -165,6 +165,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        libraryRepository = LibraryRepository(applicationContext)
 
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val future = MediaController.Builder(this, token).buildAsync()
