@@ -2,28 +2,25 @@
 
 ## Phase 0 — Foundation
 
-- [x] Repo, brand direction, CI, Gradle Wrapper
-- [x] Icon install pipeline
-- [x] Official `brand-icon.png` locked in repo (owner upload)
+- [x] Repo, brand, CI, Gradle Wrapper, official brand icon
 - [ ] Final applicationId before store release
 
 ## Phase 1 — Offline MVP ✅
 
-- [x] Import, Room, Media3, Now Playing, Mini Player, speed, delete, RTL, Vazirmatn, error banner
+- [x] Local import, Room, Media3, Now Playing, Mini Player, speed, delete, RTL, Vazirmatn, error banner
 
 ## Phase 2 — Hardening
 
-- [x] Audio focus, becoming-noisy, wake mode
-- [x] MediaSession sessionActivity + POST_NOTIFICATIONS runtime request
-- [x] Release APK artifact (debug-keystore fallback)
-- [ ] Owner device check: notification, lock screen, BT headset (manual)
+- [x] Audio focus, noisy, wake, notification permission, session activity, release APK
+- [ ] Owner device check: notification / lock screen / headset
 
-## Phase 3 — Catalog (in progress)
+## Phase 3 — Catalog
 
-- [x] Catalog models + sample repository
-- [x] Explore list + category filter
-- [x] Podcast detail + episode list
-- [ ] Real API + streaming URLs
+- [x] Models + sample repository
+- [x] Explore + category filter + podcast detail
+- [x] **HTTPS streaming** from catalog episode → Media3 (sample public MP3s)
+- [x] Streamed episodes added to Library for resume
+- [ ] Real Auralis CDN / API URLs
 - [ ] Download-to-offline
 
 ## Phase 4 — Publishing
