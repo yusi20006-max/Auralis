@@ -13,10 +13,49 @@ The first release focuses on a polished, reliable local listening experience. A 
 - **Persian-first, RTL-aware:** Persian content and right-to-left layouts are first-class; mixed Persian/English metadata must remain readable.
 - **Distinctive brand:** Use the Auralis logo and its black, electric-blue, and violet visual identity without copying another player's UI.
 
+## Current MVP status (main)
+
+| Area | Status |
+|------|--------|
+| Library (import local audio) | Done |
+| Now Playing (seek, ±15s, waveform) | Done |
+| Playback speed (Now Playing + Settings → Media3) | Done |
+| Mini Player + bottom navigation | Done |
+| Explore (categories + placeholders) | Done |
+| Profile + Settings | Done |
+| Room persistence (episodes + position) | Done |
+| RTL layout (forced) | Done |
+| Media3 background service | Done |
+| Hosted catalog / streaming | Planned |
+| Vazirmatn bundled font | Planned |
+
+## Device test checklist
+
+1. Install debug APK from CI Artifacts (`auralis-debug-apk`).
+2. Open **کتابخانه** → empty state → **افزودن فایل صوتی**.
+3. Pick an MP3/M4A → playback starts → Now Playing opens.
+4. Pause / resume from Now Playing and from Mini Player.
+5. Seek with slider; use −۱۵ / +۱۵.
+6. Change speed chips (`0.75x` … `2x`) and confirm audio rate changes.
+7. Leave app / lock screen → notification controls still work.
+8. Force-stop and reopen → library list and last position restore.
+9. Check RTL: titles, bottom bar labels, and buttons align right-to-left.
+10. Open **کشف** and **پروفایل** → **تنظیمات** → speed slider matches Now Playing.
+
+## Build
+
+```bash
+gradle :app:assembleDebug
+# or with wrapper once present:
+# ./gradlew :app:assembleDebug
+```
+
+CI: `.github/workflows/android-ci.yml` runs unit tests and uploads the debug APK.
+
 ## Planned phases
 
 1. Define product scope, brand, architecture, and acceptance criteria.
-2. Build the offline Android MVP.
+2. Build the offline Android MVP. ← **in progress / largely complete on main**
 3. Validate playback and UI on real Android devices.
 4. Add a hosted episode catalog, streaming, and offline downloads.
 5. Add publishing/admin workflows only when they are actually needed.
@@ -28,10 +67,6 @@ The first release focuses on a polished, reliable local listening experience. A 
 - [Design system](docs/DESIGN-SYSTEM.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
-
-## Current status
-
-The offline playback MVP and Media3 background service are implemented on the active feature branch. The project owner has tested the current playback flow; this does not imply that every planned UI, accessibility, or hosted-catalog feature is complete. Check the open pull request and CI for current integration status.
 
 ## License
 
