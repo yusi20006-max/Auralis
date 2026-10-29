@@ -29,6 +29,7 @@ import androidx.media3.session.SessionToken
 import com.auralis.app.data.Episode
 import com.auralis.app.data.LibraryRepository
 import com.auralis.app.data.PlaybackPreferences
+import com.auralis.app.ui.components.AuralisErrorBanner
 import com.auralis.app.ui.components.AuralisMiniPlayer
 import com.auralis.app.ui.components.ExploreNavIcon
 import com.auralis.app.ui.components.LibraryNavIcon
@@ -376,34 +377,47 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                             ) { padding ->
-                                Box(Modifier.padding(padding).fillMaxSize()) {
-                                    when (currentDestination) {
-                                        AuralisDestination.Library,
-                                        AuralisDestination.NowPlaying,
-                                        AuralisDestination.EpisodeDetail -> {
-                                            LibraryScreen(
-                                                episodes = episodes,
-                                                onEpisodeClick = { episode ->
-                                                    libraryRepository.setCurrentEpisode(episode.id)
-                                                    playEpisode(episode)
-                                                    showNowPlaying = true
-                                                },
-                                                onEpisodeDelete = { episode ->
-                                                    libraryRepository.deleteEpisode(episode.id)
-                                                },
-                                                onImportClick = { openAudio.launch(arrayOf("audio/*")) },
-                                            )
-                                        }
-                                        AuralisDestination.Explore -> {
-                                            ExploreScreen(
-                                                onImportClick = { openAudio.launch(arrayOf("audio/*")) },
-                                            )
-                                        }
-                                        AuralisDestination.Profile -> {
-                                            ProfileScreen(
-                                                episodeCount = episodes.size,
-                                                onOpenSettings = { showSettings = true },
-                                            )
+                                Column(Modifier.padding(padding).fillMaxSize()) {
+                                    if (hasPlayerError) {
+                                        AuralisErrorBanner(
+                                            message = "پخش فایل ممکن نشد. فایل جابه‌جا شده یا دسترسی از بین رفته است.",
+                                            actionLabel = "افزودن دوباره",
+                                            onAction = { openAudio.launch(arrayOf("audio/*")) },
+                                            modifier = Modifier.padding(
+                                                horizontal = AuralisSpacing.X4,
+                                                vertical = AuralisSpacing.X2,
+                                            ),
+                                        )
+                                    }
+                                    Box(Modifier.fillMaxSize()) {
+                                        when (currentDestination) {
+                                            AuralisDestination.Library,
+                                            AuralisDestination.NowPlaying,
+                                            AuralisDestination.EpisodeDetail -> {
+                                                LibraryScreen(
+                                                    episodes = episodes,
+                                                    onEpisodeClick = { episode ->
+                                                        libraryRepository.setCurrentEpisode(episode.id)
+                                                        playEpisode(episode)
+                                                        showNowPlaying = true
+                                                    },
+                                                    onEpisodeDelete = { episode ->
+                                                        libraryRepository.deleteEpisode(episode.id)
+                                                    },
+                                                    onImportClick = { openAudio.launch(arrayOf("audio/*")) },
+                                                )
+                                            }
+                                            AuralisDestination.Explore -> {
+                                                ExploreScreen(
+                                                    onImportClick = { openAudio.launch(arrayOf("audio/*")) },
+                                                )
+                                            }
+                                            AuralisDestination.Profile -> {
+                                                ProfileScreen(
+                                                    episodeCount = episodes.size,
+                                                    onOpenSettings = { showSettings = true },
+                                                )
+                                            }
                                         }
                                     }
                                 }
