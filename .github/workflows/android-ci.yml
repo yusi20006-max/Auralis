@@ -1,7 +1,7 @@
 name: Android CI
 on:
   push:
-    branches: [main, "feat/**"]
+    branches: [main, "feat/**", "feature/**"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -19,8 +19,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
-      - name: Run design token unit tests
-        run: gradle --no-daemon :app:testDebugUnitTest
+      - name: Run unit tests
+        run: gradle --no-daemon :app:testDebugUnitTest --continue
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Upload debug APK

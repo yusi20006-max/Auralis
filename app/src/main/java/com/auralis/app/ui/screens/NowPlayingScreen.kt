@@ -15,6 +15,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.auralis.app.data.Episode
+import com.auralis.app.ui.components.AuralisWaveform
 import com.auralis.app.ui.theme.AuralisColors
 import com.auralis.app.ui.theme.AuralisCorners
 import com.auralis.app.ui.theme.AuralisSpacing
@@ -31,6 +32,8 @@ fun NowPlayingScreen(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val progress = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -56,11 +59,11 @@ fun NowPlayingScreen(
             Spacer(Modifier.width(48.dp))
         }
 
-        Spacer(Modifier.height(AuralisSpacing.X6))
+        Spacer(Modifier.height(AuralisSpacing.X4))
 
         Box(
             modifier = Modifier
-                .size(280.dp)
+                .size(240.dp)
                 .clip(RoundedCornerShape(AuralisCorners.Large))
                 .background(
                     Brush.linearGradient(
@@ -77,7 +80,7 @@ fun NowPlayingScreen(
             )
         }
 
-        Spacer(Modifier.height(AuralisSpacing.X6))
+        Spacer(Modifier.height(AuralisSpacing.X4))
 
         Text(
             text = episode?.title ?: "هیچ اپیزودی انتخاب نشده",
@@ -109,9 +112,16 @@ fun NowPlayingScreen(
             }
         }
 
-        Spacer(Modifier.height(AuralisSpacing.X8))
+        Spacer(Modifier.height(AuralisSpacing.X4))
 
-        val progress = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
+        AuralisWaveform(
+            isPlaying = isPlaying,
+            progress = progress,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(Modifier.height(AuralisSpacing.X3))
+
         Slider(
             value = progress.coerceIn(0f, 1f),
             onValueChange = { fraction ->
@@ -157,7 +167,7 @@ fun NowPlayingScreen(
                 )
             }
 
-            TextButton(onClick = { onSeek((positionMs + 15_000).coerceAtMost(durationMs)) }) {
+            TextButton(onClick = { onSeek((positionMs + 15_000).coerceAtMost(durationMs.coerceAtLeast(0))) }) {
                 Text("+۱۵", color = AuralisColors.TextSecondary, fontSize = AuralisTypeScale.BodyMedium)
             }
         }
@@ -165,7 +175,7 @@ fun NowPlayingScreen(
 }
 
 private fun formatTime(ms: Long): String {
-    val totalSeconds = (ms / 1000).toInt()
+    val totalSeconds = (ms / 1000).coerceAtLeast(0).toInt()
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return "%d:%02d".format(minutes, seconds)
