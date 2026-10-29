@@ -144,7 +144,10 @@ class MainActivity : ComponentActivity() {
                 it.seekToDefaultPosition()
                 it.play()
                 status = "درخواست ادامهٔ پخش ارسال شد…"
-            } else if (it.isPlaying || it.playWhenReady) {
+            } else if (it.isPlaying || (it.playWhenReady && it.playbackState == Player.STATE_BUFFERING)) {
+                // Same condition the bar uses to show the pause glyph, so the action can never
+                // disagree with what the user tapped: with STATE_READY + playWhenReady and
+                // isPlaying=false the bar shows Play and we fall through to the play branch.
                 it.pause()
                 status = "پخش مکث شد"
             } else if (hasItem) {
