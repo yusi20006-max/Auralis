@@ -1,7 +1,14 @@
 package com.auralis.app.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -44,35 +51,40 @@ fun AuralisEmptyState(
                 .clip(CircleShape)
                 .background(
                     Brush.linearGradient(
-                        listOf(
+                        colors = listOf(
                             AuralisColors.PrimaryBlue.copy(alpha = 0.35f),
                             AuralisColors.PrimaryViolet.copy(alpha = 0.35f),
-                        )
-                    )
+                        ),
+                    ),
                 ),
             contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(AuralisCorners.Artwork))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(AuralisColors.PrimaryBlue, AuralisColors.PrimaryViolet)
+            content = {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(AuralisCorners.Artwork))
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    AuralisColors.PrimaryBlue,
+                                    AuralisColors.PrimaryViolet,
+                                ),
+                            ),
+                        ),
+                    contentAlignment = Alignment.Center,
+                    content = {
+                        Text(
+                            text = "A",
+                            color = AuralisColors.TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = AuralisTypeScale.TitleMediumMax,
                         )
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "A",
-                    color = AuralisColors.TextPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = AuralisTypeScale.TitleMediumMax,
+                    },
                 )
-            }
-        }
+            },
+        )
 
-        Spacer(Modifier.height(AuralisSpacing.X6))
+        Spacer(modifier = Modifier.height(AuralisSpacing.X6))
 
         Text(
             text = title,
@@ -81,7 +93,7 @@ fun AuralisEmptyState(
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(AuralisSpacing.X2))
+        Spacer(modifier = Modifier.height(AuralisSpacing.X2))
         Text(
             text = subtitle,
             color = AuralisColors.TextSecondary,
@@ -90,7 +102,7 @@ fun AuralisEmptyState(
         )
 
         if (actionLabel != null && onAction != null) {
-            Spacer(Modifier.height(AuralisSpacing.X6))
+            Spacer(modifier = Modifier.height(AuralisSpacing.X6))
             Button(
                 onClick = onAction,
                 colors = ButtonDefaults.buttonColors(
