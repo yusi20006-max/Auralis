@@ -134,15 +134,24 @@ class MainActivity : ComponentActivity() {
      */
     private fun togglePlayback() {
         controller?.let {
-            if (it.isPlaying || it.playWhenReady) {
+            val hasItem = it.currentMediaItem != null
+            val endedWhileLoaded = hasItem && it.playbackState == Player.STATE_ENDED
+            if (endedWhileLoaded) {
+                // Media3's play() sets the play intent but does not restart an ended item, so seek
+                // to the current item's default position first; otherwise the session stays ENDED
+                // and cannot resume. ENDED is checked before the play/pause branch because Media3
+                // can keep playWhenReady true while the player reports ENDED.
+                it.seekToDefaultPosition()
+                it.play()
+                status = "درخواست ادامهٔ پخش ارسال شد…"
+            } else if (it.isPlaying || it.playWhenReady) {
                 it.pause()
                 status = "پخش مکث شد"
-            } else if (it.currentMediaItem != null) {
-                if (it.playbackState == Player.STATE_ENDED) {
-                    // Media3's play() sets the play intent but does not restart an ended item, so
-                    // seek to the current item's default position first; otherwise the session stays
-                    // ENDED and the bar cannot resume.
-                    it.seekToDefaultPosition()
+            } else if (hasItem) {
+                // Stop() leaves the player in STATE_IDLE while retaining the item; play() alone
+                // cannot leave IDLE, so prepare before asking to play.
+                if (it.playbackState == Player.STATE_IDLE) {
+                    it.prepare()
                 }
                 it.play()
                 status = "درخواست ادامهٔ پخش ارسال شد…"
