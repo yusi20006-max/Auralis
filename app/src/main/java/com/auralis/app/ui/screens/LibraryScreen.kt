@@ -2,11 +2,24 @@ package com.auralis.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,14 +74,13 @@ fun LibraryScreen(
         }
 
         if (episodes.isEmpty()) {
-            Box(Modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                AuralisEmptyState(
-                    title = "هنوز چیزی ذخیره نکرده‌اید",
-                    subtitle = "فایل‌های صوتی پادکست‌های AI را از حافظه گوشی اضافه کنید و آفلاین گوش دهید.",
-                    actionLabel = "افزودن فایل صوتی",
-                    onAction = onImportClick,
-                )
-            }
+            AuralisEmptyState(
+                title = "هنوز چیزی ذخیره نکرده‌اید",
+                subtitle = "فایل‌های صوتی پادکست‌های AI را از حافظه گوشی اضافه کنید و آفلاین گوش دهید.",
+                actionLabel = "افزودن فایل صوتی",
+                onAction = onImportClick,
+                modifier = Modifier.fillMaxSize(),
+            )
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(AuralisSpacing.X3),
@@ -109,13 +121,14 @@ private fun EpisodeListItem(
                     .clip(RoundedCornerShape(AuralisCorners.Artwork))
                     .background(
                         Brush.linearGradient(
-                            listOf(AuralisColors.PrimaryBlue, AuralisColors.PrimaryViolet)
-                        )
+                            colors = listOf(AuralisColors.PrimaryBlue, AuralisColors.PrimaryViolet),
+                        ),
                     ),
                 contentAlignment = Alignment.Center,
-            ) {
-                Text("A", color = AuralisColors.TextPrimary, fontWeight = FontWeight.Bold)
-            }
+                content = {
+                    Text("A", color = AuralisColors.TextPrimary, fontWeight = FontWeight.Bold)
+                },
+            )
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -126,7 +139,7 @@ private fun EpisodeListItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         text = episode.podcastName,
