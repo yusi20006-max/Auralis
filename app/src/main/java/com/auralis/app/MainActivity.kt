@@ -36,6 +36,8 @@ import com.auralis.app.ui.navigation.AuralisDestination
 import com.auralis.app.ui.screens.ExploreScreen
 import com.auralis.app.ui.screens.LibraryScreen
 import com.auralis.app.ui.screens.NowPlayingScreen
+import com.auralis.app.ui.screens.ProfileScreen
+import com.auralis.app.ui.screens.SettingsScreen
 import com.auralis.app.ui.theme.AuralisColors
 import com.auralis.app.ui.theme.AuralisSpacing
 import com.auralis.app.ui.theme.AuralisTheme
@@ -67,6 +69,7 @@ class MainActivity : ComponentActivity() {
 
     private var currentDestination by mutableStateOf(AuralisDestination.Library)
     private var showNowPlaying by mutableStateOf(false)
+    private var showSettings by mutableStateOf(false)
 
     private fun displayNameFor(uri: Uri?): String? {
         val resolved = uri ?: return null
@@ -260,7 +263,7 @@ class MainActivity : ComponentActivity() {
                     hasEnded = playerState == Player.STATE_ENDED,
                     isPlaying = isPlaying,
                 )
-                val miniPlayerVisible = miniState != MiniPlayerUiState.NONE && !showNowPlaying
+                val miniPlayerVisible = miniState != MiniPlayerUiState.NONE && !showNowPlaying && !showSettings
                 val showPauseAction = isPlaying || (playWhenReady && playerState == Player.STATE_BUFFERING)
                 val trackTitle = resolveMiniPlayerTitle(
                     hasMediaItem = hasMediaItem,
@@ -269,86 +272,95 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Surface(modifier = Modifier.fillMaxSize(), color = AuralisColors.BackgroundDeep) {
-                    if (showNowPlaying) {
-                        NowPlayingScreen(
-                            episode = currentEpisode,
-                            isPlaying = isPlaying,
-                            positionMs = positionMs,
-                            durationMs = durationMs,
-                            onPlayPause = { togglePlayback() },
-                            onSeek = { seekTo(it) },
-                            onClose = { showNowPlaying = false },
-                        )
-                    } else {
-                        Scaffold(
-                            containerColor = AuralisColors.BackgroundDeep,
-                            bottomBar = {
-                                Column {
-                                    if (miniPlayerVisible) {
-                                        val interactionSource = remember { MutableInteractionSource() }
-                                        AuralisMiniPlayer(
-                                            title = trackTitle,
-                                            state = miniState,
-                                            showPauseAction = showPauseAction,
-                                            onPlayPause = { togglePlayback() },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = AuralisSpacing.X4, vertical = AuralisSpacing.X2)
-                                                .clickable(
-                                                    interactionSource = interactionSource,
-                                                    indication = null,
-                                                    onClick = { showNowPlaying = true },
-                                                ),
-                                        )
+                    when {
+                        showNowPlaying -> {
+                            NowPlayingScreen(
+                                episode = currentEpisode,
+                                isPlaying = isPlaying,
+                                positionMs = positionMs,
+                                durationMs = durationMs,
+                                onPlayPause = { togglePlayback() },
+                                onSeek = { seekTo(it) },
+                                onClose = { showNowPlaying = false },
+                            )
+                        }
+                        showSettings -> {
+                            SettingsScreen(onBack = { showSettings = false })
+                        }
+                        else -> {
+                            Scaffold(
+                                containerColor = AuralisColors.BackgroundDeep,
+                                bottomBar = {
+                                    Column {
+                                        if (miniPlayerVisible) {
+                                            val interactionSource = remember { MutableInteractionSource() }
+                                            AuralisMiniPlayer(
+                                                title = trackTitle,
+                                                state = miniState,
+                                                showPauseAction = showPauseAction,
+                                                onPlayPause = { togglePlayback() },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = AuralisSpacing.X4, vertical = AuralisSpacing.X2)
+                                                    .clickable(
+                                                        interactionSource = interactionSource,
+                                                        indication = null,
+                                                        onClick = { showNowPlaying = true },
+                                                    ),
+                                            )
+                                        }
+                                        NavigationBar(containerColor = AuralisColors.Surface) {
+                                            NavigationBarItem(
+                                                selected = currentDestination == AuralisDestination.Library,
+                                                onClick = { currentDestination = AuralisDestination.Library },
+                                                icon = { Text("📚", fontSize = AuralisTypeScale.BodyLarge) },
+                                                label = { Text("کتابخانه", fontSize = AuralisTypeScale.Caption) },
+                                                colors = navColors(),
+                                            )
+                                            NavigationBarItem(
+                                                selected = currentDestination == AuralisDestination.Explore,
+                                                onClick = { currentDestination = AuralisDestination.Explore },
+                                                icon = { Text("🔍", fontSize = AuralisTypeScale.BodyLarge) },
+                                                label = { Text("کشف", fontSize = AuralisTypeScale.Caption) },
+                                                colors = navColors(),
+                                            )
+                                            NavigationBarItem(
+                                                selected = currentDestination == AuralisDestination.Profile,
+                                                onClick = { currentDestination = AuralisDestination.Profile },
+                                                icon = { Text("👤", fontSize = AuralisTypeScale.BodyLarge) },
+                                                label = { Text("پروفایل", fontSize = AuralisTypeScale.Caption) },
+                                                colors = navColors(),
+                                            )
+                                        }
                                     }
-                                    NavigationBar(containerColor = AuralisColors.Surface) {
-                                        NavigationBarItem(
-                                            selected = currentDestination == AuralisDestination.Library,
-                                            onClick = { currentDestination = AuralisDestination.Library },
-                                            icon = { Text("📚", fontSize = AuralisTypeScale.BodyLarge) },
-                                            label = { Text("کتابخانه", fontSize = AuralisTypeScale.Caption) },
-                                            colors = navColors(),
-                                        )
-                                        NavigationBarItem(
-                                            selected = currentDestination == AuralisDestination.Explore,
-                                            onClick = { currentDestination = AuralisDestination.Explore },
-                                            icon = { Text("🔍", fontSize = AuralisTypeScale.BodyLarge) },
-                                            label = { Text("کشف", fontSize = AuralisTypeScale.Caption) },
-                                            colors = navColors(),
-                                        )
-                                        NavigationBarItem(
-                                            selected = currentDestination == AuralisDestination.Profile,
-                                            onClick = { currentDestination = AuralisDestination.Profile },
-                                            icon = { Text("👤", fontSize = AuralisTypeScale.BodyLarge) },
-                                            label = { Text("پروفایل", fontSize = AuralisTypeScale.Caption) },
-                                            colors = navColors(),
-                                        )
-                                    }
-                                }
-                            },
-                        ) { padding ->
-                            Box(Modifier.padding(padding).fillMaxSize()) {
-                                when (currentDestination) {
-                                    AuralisDestination.Library,
-                                    AuralisDestination.NowPlaying,
-                                    AuralisDestination.EpisodeDetail -> {
-                                        LibraryScreen(
-                                            episodes = episodes,
-                                            onEpisodeClick = { episode ->
-                                                libraryRepository.setCurrentEpisode(episode.id)
-                                                playEpisode(episode)
-                                                showNowPlaying = true
-                                            },
-                                            onImportClick = { openAudio.launch(arrayOf("audio/*")) },
-                                        )
-                                    }
-                                    AuralisDestination.Explore -> {
-                                        ExploreScreen(
-                                            onImportClick = { openAudio.launch(arrayOf("audio/*")) },
-                                        )
-                                    }
-                                    AuralisDestination.Profile -> {
-                                        PlaceholderScreen(title = "پروفایل", subtitle = "به زودی")
+                                },
+                            ) { padding ->
+                                Box(Modifier.padding(padding).fillMaxSize()) {
+                                    when (currentDestination) {
+                                        AuralisDestination.Library,
+                                        AuralisDestination.NowPlaying,
+                                        AuralisDestination.EpisodeDetail -> {
+                                            LibraryScreen(
+                                                episodes = episodes,
+                                                onEpisodeClick = { episode ->
+                                                    libraryRepository.setCurrentEpisode(episode.id)
+                                                    playEpisode(episode)
+                                                    showNowPlaying = true
+                                                },
+                                                onImportClick = { openAudio.launch(arrayOf("audio/*")) },
+                                            )
+                                        }
+                                        AuralisDestination.Explore -> {
+                                            ExploreScreen(
+                                                onImportClick = { openAudio.launch(arrayOf("audio/*")) },
+                                            )
+                                        }
+                                        AuralisDestination.Profile -> {
+                                            ProfileScreen(
+                                                episodeCount = episodes.size,
+                                                onOpenSettings = { showSettings = true },
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -376,28 +388,3 @@ private fun navColors() = NavigationBarItemDefaults.colors(
     unselectedIconColor = AuralisColors.TextTertiary,
     unselectedTextColor = AuralisColors.TextTertiary,
 )
-
-@Composable
-private fun PlaceholderScreen(title: String, subtitle: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(AuralisColors.BackgroundDeep),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = title,
-                color = AuralisColors.TextPrimary,
-                fontSize = AuralisTypeScale.TitleLargeMax,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(AuralisSpacing.X2))
-            Text(
-                text = subtitle,
-                color = AuralisColors.TextSecondary,
-                fontSize = AuralisTypeScale.BodyMedium,
-            )
-        }
-    }
-}
