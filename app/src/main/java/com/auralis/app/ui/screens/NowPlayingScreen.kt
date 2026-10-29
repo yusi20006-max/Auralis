@@ -21,12 +21,16 @@ import com.auralis.app.ui.theme.AuralisCorners
 import com.auralis.app.ui.theme.AuralisSpacing
 import com.auralis.app.ui.theme.AuralisTypeScale
 
+private val SPEED_PRESETS = listOf(0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
+
 @Composable
 fun NowPlayingScreen(
     episode: Episode?,
     isPlaying: Boolean,
     positionMs: Long,
     durationMs: Long,
+    playbackSpeed: Float,
+    onSpeedChange: (Float) -> Unit,
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
     onClose: () -> Unit,
@@ -56,14 +60,26 @@ fun NowPlayingScreen(
                 color = AuralisColors.TextSecondary,
                 fontSize = AuralisTypeScale.Caption,
             )
-            Spacer(Modifier.width(48.dp))
+            // Current speed badge
+            Surface(
+                color = AuralisColors.SurfaceElevated,
+                shape = RoundedCornerShape(AuralisCorners.Small),
+            ) {
+                Text(
+                    text = String.format("%.2gx", playbackSpeed).replace("0x", "x"),
+                    color = AuralisColors.PrimaryBlue,
+                    fontSize = AuralisTypeScale.Caption,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+            }
         }
 
-        Spacer(Modifier.height(AuralisSpacing.X4))
+        Spacer(Modifier.height(AuralisSpacing.X3))
 
         Box(
             modifier = Modifier
-                .size(240.dp)
+                .size(220.dp)
                 .clip(RoundedCornerShape(AuralisCorners.Large))
                 .background(
                     Brush.linearGradient(
@@ -80,7 +96,7 @@ fun NowPlayingScreen(
             )
         }
 
-        Spacer(Modifier.height(AuralisSpacing.X4))
+        Spacer(Modifier.height(AuralisSpacing.X3))
 
         Text(
             text = episode?.title ?: "هیچ اپیزودی انتخاب نشده",
@@ -112,7 +128,7 @@ fun NowPlayingScreen(
             }
         }
 
-        Spacer(Modifier.height(AuralisSpacing.X4))
+        Spacer(Modifier.height(AuralisSpacing.X3))
 
         AuralisWaveform(
             isPlaying = isPlaying,
@@ -120,7 +136,7 @@ fun NowPlayingScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        Spacer(Modifier.height(AuralisSpacing.X3))
+        Spacer(Modifier.height(AuralisSpacing.X2))
 
         Slider(
             value = progress.coerceIn(0f, 1f),
@@ -142,10 +158,10 @@ fun NowPlayingScreen(
             Text(formatTime(durationMs), color = AuralisColors.TextTertiary, fontSize = AuralisTypeScale.Caption)
         }
 
-        Spacer(Modifier.height(AuralisSpacing.X6))
+        Spacer(Modifier.height(AuralisSpacing.X4))
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(AuralisSpacing.X8),
+            horizontalArrangement = Arrangement.spacedBy(AuralisSpacing.X6),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(onClick = { onSeek((positionMs - 15_000).coerceAtLeast(0)) }) {
@@ -171,6 +187,49 @@ fun NowPlayingScreen(
                 Text("+۱۵", color = AuralisColors.TextSecondary, fontSize = AuralisTypeScale.BodyMedium)
             }
         }
+
+        Spacer(Modifier.height(AuralisSpacing.X4))
+
+        Text(
+            text = "سرعت پخش",
+            color = AuralisColors.TextSecondary,
+            fontSize = AuralisTypeScale.Caption,
+            modifier = Modifier.padding(bottom = AuralisSpacing.X2),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            SPEED_PRESETS.forEach { speed ->
+                val selected = kotlin.math.abs(playbackSpeed - speed) < 0.01f
+                FilterChip(
+                    selected = selected,
+                    onClick = { onSpeedChange(speed) },
+                    label = {
+                        Text(
+                            text = formatSpeedLabel(speed),
+                            fontSize = AuralisTypeScale.Caption,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = AuralisColors.PrimaryBlue,
+                        selectedLabelColor = AuralisColors.BackgroundDeep,
+                        containerColor = AuralisColors.SurfaceElevated,
+                        labelColor = AuralisColors.TextSecondary,
+                    ),
+                    shape = RoundedCornerShape(AuralisCorners.Button),
+                )
+            }
+        }
+    }
+}
+
+private fun formatSpeedLabel(speed: Float): String {
+    return if (speed == speed.toInt().toFloat()) {
+        "${speed.toInt()}x"
+    } else {
+        String.format("%.2gx", speed)
     }
 }
 
