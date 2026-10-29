@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -179,6 +180,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         libraryRepository = LibraryRepository(applicationContext)
         playbackPreferences = PlaybackPreferences(applicationContext)
 
@@ -316,6 +318,7 @@ class MainActivity : ComponentActivity() {
                         else -> {
                             Scaffold(
                                 containerColor = AuralisColors.BackgroundDeep,
+                                contentWindowInsets = WindowInsets.safeDrawing,
                                 bottomBar = {
                                     Column {
                                         if (miniPlayerVisible) {
