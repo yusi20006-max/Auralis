@@ -7,12 +7,12 @@
 - [x] Record provisional brand direction.
 - [x] Outline offline-first architecture.
 - [x] Create a baseline Android build and CI workflow.
-- [x] Adaptive app icon (vector A + brand colors).
+- [x] Adaptive app icon (vector; PNG brand asset can still replace).
 - [x] Gradle Wrapper scripts + properties (JAR bootstrapped in CI / `scripts/bootstrap-wrapper.sh`).
-- [ ] Commit logo source asset and document its origin.
+- [ ] Commit logo source PNG asset and document its origin.
 - [ ] Decide final Android application ID before public distribution.
 
-## Phase 1 — Offline MVP
+## Phase 1 — Offline MVP  ✅ milestone for batch device test
 
 - [x] Import local audio through Android's file picker.
 - [x] Build the library and episode information model (Room).
@@ -21,10 +21,12 @@
 - [x] Persist playback position and library list.
 - [x] Apply the Auralis design system and Persian RTL layout.
 - [x] Mini player, Explore / Profile / Settings shells.
-- [x] Device smoke-test by project owner (basic playback path).
 - [x] Episode delete from library.
-- [ ] Bundle Vazirmatn (or approved Persian typeface).
-- [ ] Stronger accessibility (TalkBack labels, large font stress test).
+- [x] Now Playing safe-area / larger hit targets / LTR speed labels.
+- [x] Vazirmatn via Google Fonts downloadable provider.
+- [x] Playback error banner with re-import action.
+- [ ] Official brand PNG as launcher icon (vector is interim).
+- [ ] Stronger TalkBack coverage and large-font stress test.
 - [ ] Broader automated UI / integration tests.
 
 ## Phase 2 — Hardening
@@ -33,7 +35,7 @@
 - [ ] Test Bluetooth/headset controls, audio focus, interruptions, and notification behavior.
 - [ ] Measure startup, scrolling, memory use, and playback responsiveness.
 - [ ] Produce a signed release/test build and document installation.
-- [ ] Error recovery UX when a URI grant is lost or file is missing.
+- [ ] Deeper error recovery when a URI grant is lost or file is missing.
 
 ## Phase 3 — Hosted podcast catalog
 
