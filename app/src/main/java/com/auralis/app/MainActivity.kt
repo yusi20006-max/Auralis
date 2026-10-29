@@ -9,18 +9,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -28,48 +25,48 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import com.google.common.util.concurrent.ListenableFuture
-import java.util.concurrent.ExecutionException
+import com.auralis.app.data.Episode
+import com.auralis.app.data.LibraryRepository
 import com.auralis.app.ui.components.AuralisMiniPlayer
 import com.auralis.app.ui.components.MiniPlayerUiState
 import com.auralis.app.ui.components.fileNameFromDocumentPath
 import com.auralis.app.ui.components.resolveMiniPlayerTitle
 import com.auralis.app.ui.components.resolveMiniPlayerUiState
+import com.auralis.app.ui.navigation.AuralisDestination
+import com.auralis.app.ui.screens.LibraryScreen
+import com.auralis.app.ui.screens.NowPlayingScreen
 import com.auralis.app.ui.theme.AuralisColors
 import com.auralis.app.ui.theme.AuralisSpacing
 import com.auralis.app.ui.theme.AuralisTheme
 import com.auralis.app.ui.theme.AuralisTypeScale
+import com.google.common.util.concurrent.ListenableFuture
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.concurrent.ExecutionException
 
 class MainActivity : ComponentActivity() {
+
+    private lateinit var libraryRepository: LibraryRepository
+
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
-    private var pendingUri: Uri? = null
-    private var selectedTitle by mutableStateOf("هنوز فایلی انتخاب نشده")
-    private var isPlaying by mutableStateOf(false)
-    private var status by mutableStateOf("یک فایل صوتی از حافظهٔ گوشی انتخاب کنید.")
 
-    // Session facts mirrored for the mini player. Every one of these is read back from the same
-    // MediaController that drives the existing screen; none of them is set optimistically.
+    private var isPlaying by mutableStateOf(false)
     private var playerState by mutableStateOf(Player.STATE_IDLE)
     private var playWhenReady by mutableStateOf(false)
     private var hasMediaItem by mutableStateOf(false)
     private var hasPlayerError by mutableStateOf(false)
     private var sessionTitle by mutableStateOf<String?>(null)
     private var attachedFileName by mutableStateOf<String?>(null)
+    private var positionMs by mutableStateOf(0L)
+    private var durationMs by mutableStateOf(0L)
 
-    /**
-     * Display name of a document URI; null when the URI carries no usable name.
-     *
-     * The URI segment is only a hint: for MediaDocumentsProvider, `document/audio%3A1234`
-     * yields the opaque id `audio:1234`, whose numeric tail is not a file name. The provider
-     * owns the human-readable name, so ask for it first and fall back to parsing the segment
-     * only when the provider cannot answer (`file:` URIs, providers without the column).
-     *
-     * The query is read-only metadata and does not touch the persisted grant.
-     */
+    private var currentDestination by mutableStateOf(AuralisDestination.Library)
+    private var showNowPlaying by mutableStateOf(false)
+
     private fun displayNameFor(uri: Uri?): String? {
         val resolved = uri ?: return null
         if (resolved.scheme == "content") {
@@ -80,23 +77,13 @@ class MainActivity : ComponentActivity() {
                         val column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                         if (column != -1 && cursor.moveToFirst()) {
                             cursor.getString(column)?.takeIf { it.isNotBlank() }
-                        } else {
-                            null
-                        }
-                    }
-                    ?.let { return it }
-            } catch (_: Exception) {
-                // The provider refused the query; fall through to the URI-segment fallback.
-            }
+                        } else null
+                    }?.let { return it }
+            } catch (_: Exception) { }
         }
         return fileNameFromDocumentPath(resolved.lastPathSegment)
     }
 
-    /**
-     * Resolves a document display name off the main thread and applies it on the main thread, so a
-     * slow provider cannot freeze the picker callback, the attach listener or a media-item
-     * transition while the user is trying to use the app.
-     */
     private fun resolveDisplayNameOffMain(uri: Uri?, onResolved: (String?) -> Unit) {
         lifecycleScope.launch(Dispatchers.IO) {
             val name = displayNameFor(uri)
@@ -105,263 +92,263 @@ class MainActivity : ComponentActivity() {
     }
 
     private val openAudio = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri != null) {
-            try {
-                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (_: SecurityException) {
-                // The temporary read grant from OpenDocument remains usable for this activity session.
-            } catch (_: IllegalArgumentException) {
-                // Some document providers do not offer persistable grants.
-            }
-            pendingUri = uri
-            val requestedUri = uri
-            resolveDisplayNameOffMain(requestedUri) { name ->
-                // Apply only the result that still belongs to the URI just picked; a later pick
-                // must not let an older query overwrite the display name it started.
-                if (pendingUri == requestedUri) {
-                    selectedTitle = name ?: "فایل صوتی انتخاب‌شده"
-                }
-            }
-            startSelectedFileIfReady()
+        if (uri == null) return@registerForActivityResult
+        try {
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (_: Exception) { }
+
+        resolveDisplayNameOffMain(uri) { name ->
+            val title = name ?: "فایل صوتی"
+            val episode = libraryRepository.addLocalEpisode(uri = uri, title = title)
+            libraryRepository.setCurrentEpisode(episode.id)
+            playEpisode(episode)
         }
     }
 
-    private fun startSelectedFileIfReady() {
-        val player = controller
-        val uri = pendingUri
-        if (player == null || uri == null) {
-            status = "فایل انتخاب شد؛ در انتظار آماده‌شدن پخش‌کننده…"
-            return
-        }
+    private fun playEpisode(episode: Episode) {
+        val player = controller ?: return
+        val uri = episode.localUri ?: return
         try {
-            status = "در حال آماده‌سازی فایل…"
-            isPlaying = false
             hasPlayerError = false
             player.pause()
-            player.setMediaItem(MediaItem.fromUri(uri))
-            // Only after setMediaItem returned: on the failure path below no media is loaded,
-            // so the bar must not claim otherwise.
+            player.setMediaItem(
+                MediaItem.Builder()
+                    .setUri(uri)
+                    .setMediaId(episode.id)
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle(episode.title)
+                            .setArtist(episode.podcastName)
+                            .build()
+                    )
+                    .build()
+            )
             hasMediaItem = true
             player.prepare()
+            if (episode.lastPositionMs > 0) {
+                player.seekTo(episode.lastPositionMs)
+            }
             player.playWhenReady = true
             player.play()
-        } catch (error: RuntimeException) {
-            isPlaying = false
-            status = "شروع پخش ناموفق بود: ${error.message ?: error.javaClass.simpleName}"
+            libraryRepository.setCurrentEpisode(episode.id)
+        } catch (_: RuntimeException) {
+            hasPlayerError = true
         }
     }
 
-    /**
-     * The one toggle used by both the original control and the mini player. Extracted verbatim so
-     * both entry points drive the very same existing session.
-     */
     private fun togglePlayback() {
-        controller?.let {
-            val hasItem = it.currentMediaItem != null
-            val endedWhileLoaded = hasItem && it.playbackState == Player.STATE_ENDED
-            if (endedWhileLoaded) {
-                // Media3's play() sets the play intent but does not restart an ended item, so seek
-                // to the current item's default position first; otherwise the session stays ENDED
-                // and cannot resume. ENDED is checked before the play/pause branch because Media3
-                // can keep playWhenReady true while the player reports ENDED.
-                it.seekToDefaultPosition()
-                it.play()
+        val player = controller ?: return
+        val hasItem = player.currentMediaItem != null
+        val endedWhileLoaded = hasItem && player.playbackState == Player.STATE_ENDED
+
+        when {
+            endedWhileLoaded -> {
+                player.seekToDefaultPosition()
+                player.play()
                 hasPlayerError = false
-                status = "درخواست ادامهٔ پخش ارسال شد…"
-            } else if (it.isPlaying || (it.playWhenReady && it.playbackState == Player.STATE_BUFFERING)) {
-                // Same condition the bar uses to show the pause glyph, so the action can never
-                // disagree with what the user tapped: with STATE_READY + playWhenReady and
-                // isPlaying=false the bar shows Play and we fall through to the play branch.
-                it.pause()
-                status = "پخش مکث شد"
-            } else if (hasItem) {
-                // Stop() leaves the player in STATE_IDLE while retaining the item; play() alone
-                // cannot leave IDLE, so prepare before asking to play.
-                if (it.playbackState == Player.STATE_IDLE) {
-                    it.prepare()
-                }
-                it.play()
-                hasPlayerError = false
-                status = "درخواست ادامهٔ پخش ارسال شد…"
-            } else {
-                startSelectedFileIfReady()
             }
-        } ?: run { status = "پخش‌کننده هنوز متصل نشده است." }
+            player.isPlaying || (player.playWhenReady && player.playbackState == Player.STATE_BUFFERING) -> {
+                player.pause()
+            }
+            hasItem -> {
+                if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                player.play()
+                hasPlayerError = false
+            }
+        }
+    }
+
+    private fun seekTo(position: Long) {
+        controller?.seekTo(position)
+        positionMs = position
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        libraryRepository = LibraryRepository(applicationContext)
+
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val future = MediaController.Builder(this, token).buildAsync()
         controllerFuture = future
+
         future.addListener({
             try {
                 controller = future.get()
                 controller?.let { connected ->
-                    // Seed the mirrored facts from the session before listening, so a re-attached
-                    // controller never renders a stale or guessed state. isPlaying and the retained
-                    // error are seeded too: a recreated activity must not report PAUSED while the
-                    // service still plays, nor hide an error Media3 does not replay as a callback.
                     isPlaying = connected.isPlaying
                     hasPlayerError = connected.playerError != null
                     playerState = connected.playbackState
                     playWhenReady = connected.playWhenReady
                     hasMediaItem = connected.currentMediaItem != null
-                    connected.currentMediaItem?.localConfiguration?.uri?.let { attachedUri ->
-                        resolveDisplayNameOffMain(attachedUri) { name -> attachedFileName = name }
+                    durationMs = connected.duration.coerceAtLeast(0L)
+                    positionMs = connected.currentPosition.coerceAtLeast(0L)
+
+                    connected.currentMediaItem?.localConfiguration?.uri?.let { uri ->
+                        resolveDisplayNameOffMain(uri) { name -> attachedFileName = name }
                     }
-                    sessionTitle = connected.mediaMetadata.title
-                        ?.toString()
-                        ?.takeIf { it.isNotBlank() }
+                    sessionTitle = connected.mediaMetadata.title?.toString()?.takeIf { it.isNotBlank() }
+
+                    connected.addListener(object : Player.Listener {
+                        override fun onIsPlayingChanged(playing: Boolean) {
+                            isPlaying = playing
+                        }
+
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            playerState = playbackState
+                            if (playbackState == Player.STATE_ENDED) isPlaying = false
+                            if (playbackState == Player.STATE_READY) {
+                                durationMs = connected.duration.coerceAtLeast(0L)
+                            }
+                        }
+
+                        override fun onPlayWhenReadyChanged(ready: Boolean, reason: Int) {
+                            playWhenReady = ready
+                        }
+
+                        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                            hasMediaItem = mediaItem != null
+                            mediaItem?.localConfiguration?.uri?.let { uri ->
+                                resolveDisplayNameOffMain(uri) { name -> attachedFileName = name }
+                            }
+                            sessionTitle = mediaItem?.mediaMetadata?.title?.toString()?.takeIf { it.isNotBlank() }
+                        }
+
+                        override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+                            sessionTitle = mediaMetadata.title?.toString()?.takeIf { it.isNotBlank() }
+                        }
+
+                        override fun onPlayerError(error: PlaybackException) {
+                            isPlaying = false
+                            hasPlayerError = true
+                        }
+                    })
+
+                    lifecycleScope.launch {
+                        while (isActive) {
+                            val c = controller
+                            if (c != null && c.isPlaying) {
+                                positionMs = c.currentPosition.coerceAtLeast(0L)
+                                durationMs = c.duration.coerceAtLeast(0L)
+                                c.currentMediaItem?.mediaId?.let { id ->
+                                    if (id.isNotBlank()) {
+                                        libraryRepository.updatePosition(id, positionMs)
+                                    }
+                                }
+                            }
+                            delay(500)
+                        }
+                    }
                 }
-                controller?.addListener(object : Player.Listener {
-                    override fun onIsPlayingChanged(playing: Boolean) {
-                        isPlaying = playing
-                        if (playing) {
-                            status = "در حال پخش"
-                        } else if (controller?.playWhenReady == true &&
-                            controller?.playbackState == Player.STATE_BUFFERING
-                        ) {
-                            status = "در حال بارگذاری صدا…"
-                        } else if (controller?.playbackState == Player.STATE_ENDED) {
-                            status = "پخش فایل به پایان رسید."
-                        } else if (controller?.playWhenReady == false && status == "در حال پخش") {
-                            status = "پخش متوقف است"
-                        }
-                    }
-
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        playerState = playbackState
-                        when (playbackState) {
-                            Player.STATE_BUFFERING -> if (controller?.playWhenReady == true) {
-                                status = "در حال بارگذاری صدا…"
-                            }
-                            Player.STATE_READY -> if (controller?.playWhenReady == true && !isPlaying) {
-                                status = "فایل آماده است؛ منتظر شروع صدا…"
-                            }
-                            Player.STATE_ENDED -> {
-                                isPlaying = false
-                                status = "پخش فایل به پایان رسید."
-                            }
-                        }
-                    }
-
-                    override fun onPlayWhenReadyChanged(ready: Boolean, reason: Int) {
-                        playWhenReady = ready
-                    }
-
-                    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                        hasMediaItem = mediaItem != null
-                        mediaItem?.localConfiguration?.uri?.let { attachedUri ->
-                            resolveDisplayNameOffMain(attachedUri) { name -> attachedFileName = name }
-                        }
-                        sessionTitle = mediaItem?.mediaMetadata?.title
-                            ?.toString()
-                            ?.takeIf { it.isNotBlank() }
-                    }
-
-                    override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
-                        // Combined player metadata, not just the MediaItem's: this is where
-                        // titles parsed from the file itself (ID3 and friends) arrive, and it
-                        // fires independently of onMediaItemTransition.
-                        sessionTitle = mediaMetadata.title
-                            ?.toString()
-                            ?.takeIf { it.isNotBlank() }
-                    }
-
-                    override fun onPlayerError(error: PlaybackException) {
-                        isPlaying = false
-                        hasPlayerError = true
-                        status = "خطای پخش (${error.errorCodeName}): ${error.message ?: "قالب فایل پشتیبانی نمی‌شود"}"
-                    }
-                })
-                startSelectedFileIfReady()
-            } catch (error: ExecutionException) {
-                status = "اتصال به پخش‌کننده ناموفق بود: ${error.cause?.message ?: error.message}"
+            } catch (_: ExecutionException) {
+                hasPlayerError = true
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
-                status = "آماده‌سازی پخش‌کننده متوقف شد."
             }
         }, mainExecutor)
 
         setContent {
-            val background = Brush.verticalGradient(listOf(AuralisColors.BackgroundDeep, AuralisColors.Surface, AuralisColors.BackgroundDeep))
             AuralisTheme {
-                val isSessionPlaying = isPlaying
+                val episodes by libraryRepository.episodes.collectAsState()
+                val currentEpisodeId by libraryRepository.currentEpisodeId.collectAsState()
+                val currentEpisode = episodes.find { it.id == currentEpisodeId }
+
                 val miniState = resolveMiniPlayerUiState(
                     hasMediaItem = hasMediaItem,
                     hasPlayerError = hasPlayerError,
                     isBuffering = playerState == Player.STATE_BUFFERING,
                     hasEnded = playerState == Player.STATE_ENDED,
-                    isPlaying = isSessionPlaying,
+                    isPlaying = isPlaying,
                 )
-                val miniPlayerVisible = miniState != MiniPlayerUiState.NONE
-                // Pause glyph only while the session really is playing, or is buffering with
-                // playWhenReady set. Anything else honestly offers "play".
-                val showPauseAction = isSessionPlaying ||
-                    (playWhenReady && playerState == Player.STATE_BUFFERING)
+                val miniPlayerVisible = miniState != MiniPlayerUiState.NONE && !showNowPlaying
+                val showPauseAction = isPlaying || (playWhenReady && playerState == Player.STATE_BUFFERING)
                 val trackTitle = resolveMiniPlayerTitle(
                     hasMediaItem = hasMediaItem,
                     mediaMetadataTitle = sessionTitle,
-                    pickedFileName = selectedTitle
-                        .takeIf { it.isNotBlank() && it != "هنوز فایلی انتخاب نشده" }
-                        ?: attachedFileName,
+                    pickedFileName = currentEpisode?.title ?: attachedFileName,
                 )
 
-                // Reserve the bar band before centring, so the opaque bar can never sit over
-                // the controls, and scroll the column so nothing is ever clipped on a short
-                // window, split-screen or a large font scale. With the bar hidden this is the
-                // exact padding the screen had on main.
-                val bottomInset = if (miniPlayerVisible) AuralisSpacing.X6 + AuralisSpacing.MiniPlayerMaxHeight else AuralisSpacing.X6
-
-                Surface(Modifier.fillMaxSize(), color = AuralisColors.BackgroundDeep) {
-                    Box(Modifier.fillMaxSize().background(background)) {
-                        Box(
-                            Modifier
-                                .fillMaxSize()
-                                .padding(start = AuralisSpacing.X6, top = AuralisSpacing.X6, end = AuralisSpacing.X6, bottom = bottomInset),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("AURALIS", color = AuralisColors.AccentCyan, fontSize = AuralisTypeScale.HeroMax, fontWeight = FontWeight.Black, letterSpacing = 5.sp)
-                                Spacer(Modifier.height(6.dp))
-                                Text("OFFLINE AUDIO", color = AuralisColors.PrimaryViolet, fontSize = AuralisTypeScale.Overline, letterSpacing = 3.sp)
-                                Spacer(Modifier.height(AuralisSpacing.X8 + AuralisSpacing.X2))
-                                Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge, color = AuralisColors.Surface) {
-                                    Column(Modifier.padding(AuralisSpacing.X6), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("پخش‌کنندهٔ آفلاین", color = AuralisColors.TextPrimary, fontSize = AuralisTypeScale.TitleLargeMin, fontWeight = FontWeight.Bold)
-                                        Spacer(Modifier.height(16.dp))
-                                        Text(selectedTitle, color = AuralisColors.TextPrimary, textAlign = TextAlign.Center, fontSize = AuralisTypeScale.BodyMedium)
-                                        Spacer(Modifier.height(10.dp))
-                                        Text(status, color = AuralisColors.TextSecondary, textAlign = TextAlign.Center, fontSize = AuralisTypeScale.BodyMedium)
-                                        Spacer(Modifier.height(24.dp))
-                                        Button(onClick = { openAudio.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryBlue, contentColor = AuralisColors.BackgroundDeep)) { Text("انتخاب فایل صوتی") }
-                                        Spacer(Modifier.height(12.dp))
-                                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Button(onClick = { togglePlayback() }, colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryViolet, contentColor = AuralisColors.BackgroundDeep)) { Text(if (isPlaying) "مکث" else "ادامهٔ پخش") }
-                                            Button(onClick = {
-                                                controller?.stop()
-                                                isPlaying = false
-                                                status = "پخش متوقف شد"
-                                            }, colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.SurfaceElevated)) { Text("توقف") }
-                                        }
+                Surface(modifier = Modifier.fillMaxSize(), color = AuralisColors.BackgroundDeep) {
+                    if (showNowPlaying) {
+                        NowPlayingScreen(
+                            episode = currentEpisode,
+                            isPlaying = isPlaying,
+                            positionMs = positionMs,
+                            durationMs = durationMs,
+                            onPlayPause = { togglePlayback() },
+                            onSeek = { seekTo(it) },
+                            onClose = { showNowPlaying = false },
+                        )
+                    } else {
+                        Scaffold(
+                            containerColor = AuralisColors.BackgroundDeep,
+                            bottomBar = {
+                                Column {
+                                    if (miniPlayerVisible) {
+                                        val interactionSource = remember { MutableInteractionSource() }
+                                        AuralisMiniPlayer(
+                                            title = trackTitle,
+                                            state = miniState,
+                                            showPauseAction = showPauseAction,
+                                            onPlayPause = { togglePlayback() },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = AuralisSpacing.X4, vertical = AuralisSpacing.X2)
+                                                .clickable(
+                                                    interactionSource = interactionSource,
+                                                    indication = null,
+                                                    onClick = { showNowPlaying = true },
+                                                ),
+                                        )
+                                    }
+                                    NavigationBar(containerColor = AuralisColors.Surface) {
+                                        NavigationBarItem(
+                                            selected = currentDestination == AuralisDestination.Library,
+                                            onClick = { currentDestination = AuralisDestination.Library },
+                                            icon = { Text("📚", fontSize = AuralisTypeScale.BodyLarge) },
+                                            label = { Text("کتابخانه", fontSize = AuralisTypeScale.Caption) },
+                                            colors = navColors(),
+                                        )
+                                        NavigationBarItem(
+                                            selected = currentDestination == AuralisDestination.Explore,
+                                            onClick = { currentDestination = AuralisDestination.Explore },
+                                            icon = { Text("🔍", fontSize = AuralisTypeScale.BodyLarge) },
+                                            label = { Text("کشف", fontSize = AuralisTypeScale.Caption) },
+                                            colors = navColors(),
+                                        )
+                                        NavigationBarItem(
+                                            selected = currentDestination == AuralisDestination.Profile,
+                                            onClick = { currentDestination = AuralisDestination.Profile },
+                                            icon = { Text("👤", fontSize = AuralisTypeScale.BodyLarge) },
+                                            label = { Text("پروفایل", fontSize = AuralisTypeScale.Caption) },
+                                            colors = navColors(),
+                                        )
                                     }
                                 }
-                                Spacer(Modifier.height(22.dp))
-                                Text("نسخهٔ آزمایشی · بدون سرور و حساب کاربری", color = AuralisColors.TextSecondary, fontSize = AuralisTypeScale.Caption, textAlign = TextAlign.Center)
+                            },
+                        ) { padding ->
+                            Box(Modifier.padding(padding).fillMaxSize()) {
+                                when (currentDestination) {
+                                    AuralisDestination.Library,
+                                    AuralisDestination.NowPlaying,
+                                    AuralisDestination.EpisodeDetail -> {
+                                        LibraryScreen(
+                                            episodes = episodes,
+                                            onEpisodeClick = { episode ->
+                                                libraryRepository.setCurrentEpisode(episode.id)
+                                                playEpisode(episode)
+                                                showNowPlaying = true
+                                            },
+                                            onImportClick = { openAudio.launch(arrayOf("audio/*")) },
+                                        )
+                                    }
+                                    AuralisDestination.Explore -> {
+                                        PlaceholderScreen(title = "کشف", subtitle = "به زودی")
+                                    }
+                                    AuralisDestination.Profile -> {
+                                        PlaceholderScreen(title = "پروفایل", subtitle = "به زودی")
+                                    }
+                                }
                             }
-                        }
-                        if (miniPlayerVisible) {
-                            // Sits inside the band bottomInset reserved above, so it can never
-                            // cover the controls; the column scrolls so a short window, split-screen
-                            // or a large font scale cannot clip them either.
-                            AuralisMiniPlayer(
-                                title = trackTitle,
-                                state = miniState,
-                                showPauseAction = showPauseAction,
-                                onPlayPause = { togglePlayback() },
-                                modifier = Modifier.align(Alignment.BottomCenter).padding(AuralisSpacing.X6),
-                            )
                         }
                     }
                 }
@@ -375,5 +362,39 @@ class MainActivity : ComponentActivity() {
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
         super.onDestroy()
+    }
+}
+
+@Composable
+private fun navColors() = NavigationBarItemDefaults.colors(
+    selectedIconColor = AuralisColors.PrimaryBlue,
+    selectedTextColor = AuralisColors.PrimaryBlue,
+    indicatorColor = AuralisColors.SurfaceElevated,
+    unselectedIconColor = AuralisColors.TextTertiary,
+    unselectedTextColor = AuralisColors.TextTertiary,
+)
+
+@Composable
+private fun PlaceholderScreen(title: String, subtitle: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(AuralisColors.BackgroundDeep),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = title,
+                color = AuralisColors.TextPrimary,
+                fontSize = AuralisTypeScale.TitleLargeMax,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(AuralisSpacing.X2))
+            Text(
+                text = subtitle,
+                color = AuralisColors.TextSecondary,
+                fontSize = AuralisTypeScale.BodyMedium,
+            )
+        }
     }
 }
