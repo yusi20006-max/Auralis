@@ -2,6 +2,8 @@ package com.auralis.app.data
 
 import android.content.Context
 import android.net.Uri
+import com.auralis.app.data.catalog.CatalogEpisode
+import com.auralis.app.data.catalog.CatalogPodcast
 import com.auralis.app.data.db.AuralisDatabase
 import com.auralis.app.data.db.EpisodeEntity
 import kotlinx.coroutines.CoroutineScope
@@ -18,7 +20,6 @@ import java.util.UUID
 
 /**
  * Library repository backed by Room.
- * UI observes [episodes] and [currentEpisodeId] as StateFlows.
  */
 class LibraryRepository(context: Context) {
 
@@ -52,6 +53,32 @@ class LibraryRepository(context: Context) {
             if (existing == null) {
                 dao.upsert(EpisodeEntity.from(episode))
             }
+        }
+        return episode
+    }
+
+    /**
+     * Add or reuse a catalog stream episode so it appears in Library and can resume.
+     */
+    fun addOrGetStreamEpisode(
+        catalogEpisode: CatalogEpisode,
+        podcast: CatalogPodcast?,
+    ): Episode {
+        val existing = episodes.value.find { it.remoteId == catalogEpisode.id }
+        if (existing != null) return existing
+
+        val episode = Episode(
+            id = UUID.randomUUID().toString(),
+            title = catalogEpisode.title,
+            podcastName = podcast?.title ?: "Auralis",
+            description = catalogEpisode.description,
+            durationMs = catalogEpisode.durationMs,
+            remoteId = catalogEpisode.id,
+            audioUrl = catalogEpisode.audioUrl,
+            isAiGenerated = catalogEpisode.isAiGenerated,
+        )
+        scope.launch {
+            dao.upsert(EpisodeEntity.from(episode))
         }
         return episode
     }

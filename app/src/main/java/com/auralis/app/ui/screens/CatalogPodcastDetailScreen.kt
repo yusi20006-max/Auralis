@@ -132,8 +132,10 @@ private fun EpisodeRow(
     episode: CatalogEpisode,
     onClick: () -> Unit,
 ) {
+    val canStream = episode.audioUrl.isNotBlank()
     Surface(
         onClick = onClick,
+        enabled = canStream,
         modifier = Modifier.fillMaxWidth(),
         color = AuralisColors.Surface,
         shape = RoundedCornerShape(AuralisCorners.Card),
@@ -158,15 +160,11 @@ private fun EpisodeRow(
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))
-            val mins = (episode.durationMs / 60_000L).coerceAtLeast(0)
             Text(
-                text = if (episode.audioUrl.isBlank()) {
-                    "استریم به‌زودی · ${mins} دقیقه"
-                } else {
-                    "${mins} دقیقه"
-                },
-                color = AuralisColors.TextTertiary,
+                text = if (canStream) "▶ پخش آنلاین" else "استریم به‌زودی",
+                color = if (canStream) AuralisColors.PrimaryBlue else AuralisColors.TextTertiary,
                 fontSize = AuralisTypeScale.Overline,
+                fontWeight = FontWeight.SemiBold,
             )
         }
     }

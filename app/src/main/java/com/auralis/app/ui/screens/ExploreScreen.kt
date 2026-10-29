@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.auralis.app.data.catalog.CatalogEpisode
 import com.auralis.app.data.catalog.CatalogPodcast
 import com.auralis.app.data.catalog.CatalogRepository
 import com.auralis.app.ui.theme.AuralisColors
@@ -48,6 +49,7 @@ private val categories = listOf("همه", "فلسفه", "علم", "تکنولو�
 @Composable
 fun ExploreScreen(
     onImportClick: () -> Unit,
+    onStreamEpisode: (CatalogPodcast, CatalogEpisode) -> Unit = { _, _ -> },
     catalogRepository: CatalogRepository = remember { CatalogRepository() },
     modifier: Modifier = Modifier,
 ) {
@@ -62,8 +64,8 @@ fun ExploreScreen(
             podcast = podcast,
             catalogRepository = catalogRepository,
             onBack = { selectedPodcast = null },
-            onEpisodeClick = {
-                // Streaming not wired yet — detail still shows episode list.
+            onEpisodeClick = { episode ->
+                onStreamEpisode(podcast, episode)
             },
             modifier = modifier,
         )
@@ -124,7 +126,7 @@ fun ExploreScreen(
             )
             Spacer(modifier = Modifier.height(AuralisSpacing.X2))
             Text(
-                text = "پادکست را باز کن تا اپیزودها را ببینی. پخش آنلاین به‌زودی.",
+                text = "پادکست را باز کن و یک اپیزود را برای پخش آنلاین انتخاب کن.",
                 color = AuralisColors.TextTertiary,
                 fontSize = AuralisTypeScale.Caption,
             )
