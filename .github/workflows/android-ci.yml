@@ -16,6 +16,8 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      - name: Install brand launcher icons from user logo
+        run: sh scripts/install-brand-icons.sh
       - name: Ensure Gradle Wrapper JAR
         run: |
           mkdir -p gradle/wrapper
