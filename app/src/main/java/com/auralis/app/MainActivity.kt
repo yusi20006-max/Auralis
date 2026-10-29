@@ -33,6 +33,7 @@ import com.auralis.app.ui.components.fileNameFromDocumentPath
 import com.auralis.app.ui.components.resolveMiniPlayerTitle
 import com.auralis.app.ui.components.resolveMiniPlayerUiState
 import com.auralis.app.ui.navigation.AuralisDestination
+import com.auralis.app.ui.screens.ExploreScreen
 import com.auralis.app.ui.screens.LibraryScreen
 import com.auralis.app.ui.screens.NowPlayingScreen
 import com.auralis.app.ui.theme.AuralisColors
@@ -342,7 +343,9 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                     AuralisDestination.Explore -> {
-                                        PlaceholderScreen(title = "کشف", subtitle = "به زودی")
+                                        ExploreScreen(
+                                            onImportClick = { openAudio.launch(arrayOf("audio/*")) },
+                                        )
                                     }
                                     AuralisDestination.Profile -> {
                                         PlaceholderScreen(title = "پروفایل", subtitle = "به زودی")
