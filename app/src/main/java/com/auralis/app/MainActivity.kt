@@ -138,6 +138,13 @@ class MainActivity : ComponentActivity() {
                 it.pause()
                 status = "پخش مکث شد"
             } else if (it.currentMediaItem != null) {
+                val mediaItem = it.currentMediaItem
+                if (it.playbackState == Player.STATE_ENDED && mediaItem != null) {
+                    // Media3's play() sets the play intent but does not restart an ended item, so
+                    // seek to the item's default position first; otherwise the session stays ENDED
+                    // and the bar cannot resume.
+                    it.seekTo(mediaItem)
+                }
                 it.play()
                 status = "درخواست ادامهٔ پخش ارسال شد…"
             } else {
