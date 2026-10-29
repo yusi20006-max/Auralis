@@ -29,11 +29,13 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.google.common.util.concurrent.ListenableFuture
 import java.util.concurrent.ExecutionException
 import com.auralis.app.ui.components.AuralisMiniPlayer
+import com.auralis.app.ui.components.AuralisNowPlaying
 import com.auralis.app.ui.components.MiniPlayerUiState
 import com.auralis.app.ui.components.fileNameFromDocumentPath
 import com.auralis.app.ui.components.resolveMiniPlayerTitle
@@ -59,6 +61,8 @@ class MainActivity : ComponentActivity() {
     private var hasPlayerError by mutableStateOf(false)
     private var sessionTitle by mutableStateOf<String?>(null)
     private var attachedFileName by mutableStateOf<String?>(null)
+    private var positionMs by mutableStateOf(0L)
+    private var durationMs by mutableStateOf(0L)
 
     /**
      * Display name of a document URI; null when the URI carries no usable name.
@@ -287,6 +291,19 @@ class MainActivity : ComponentActivity() {
         setContent {
             val background = Brush.verticalGradient(listOf(AuralisColors.BackgroundDeep, AuralisColors.Surface, AuralisColors.BackgroundDeep))
             AuralisTheme {
+                LaunchedEffect(controller, hasMediaItem) {
+                    while (true) {
+                        val active = controller
+                        if (active != null && hasMediaItem) {
+                            positionMs = active.currentPosition.coerceAtLeast(0L)
+                            durationMs = active.duration.takeIf { it > 0L && it != androidx.media3.common.C.TIME_UNSET } ?: 0L
+                        } else {
+                            positionMs = 0L
+                            durationMs = 0L
+                        }
+                        delay(500L)
+                    }
+                }
                 val isSessionPlaying = isPlaying
                 val miniState = resolveMiniPlayerUiState(
                     hasMediaItem = hasMediaItem,
@@ -327,26 +344,33 @@ class MainActivity : ComponentActivity() {
                                 Spacer(Modifier.height(6.dp))
                                 Text("OFFLINE AUDIO", color = AuralisColors.PrimaryViolet, fontSize = AuralisTypeScale.Overline, letterSpacing = 3.sp)
                                 Spacer(Modifier.height(AuralisSpacing.X8 + AuralisSpacing.X2))
-                                Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge, color = AuralisColors.Surface) {
-                                    Column(Modifier.padding(AuralisSpacing.X6), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("پخش‌کنندهٔ آفلاین", color = AuralisColors.TextPrimary, fontSize = AuralisTypeScale.TitleLargeMin, fontWeight = FontWeight.Bold)
-                                        Spacer(Modifier.height(16.dp))
-                                        Text(selectedTitle, color = AuralisColors.TextPrimary, textAlign = TextAlign.Center, fontSize = AuralisTypeScale.BodyMedium)
-                                        Spacer(Modifier.height(10.dp))
-                                        Text(status, color = AuralisColors.TextSecondary, textAlign = TextAlign.Center, fontSize = AuralisTypeScale.BodyMedium)
-                                        Spacer(Modifier.height(24.dp))
-                                        Button(onClick = { openAudio.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryBlue, contentColor = AuralisColors.BackgroundDeep)) { Text("انتخاب فایل صوتی") }
-                                        Spacer(Modifier.height(12.dp))
-                                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Button(onClick = { togglePlayback() }, colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryViolet, contentColor = AuralisColors.BackgroundDeep)) { Text(if (isPlaying) "مکث" else "ادامهٔ پخش") }
-                                            Button(onClick = {
-                                                controller?.stop()
-                                                isPlaying = false
-                                                status = "پخش متوقف شد"
-                                            }, colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.SurfaceElevated)) { Text("توقف") }
-                                        }
-                                    }
-                                }
+                                AuralisNowPlaying(
+                                    title = trackTitle.ifBlank { "هنوز فایلی انتخاب نشده" },
+                                    subtitle = attachedFileName ?: selectedTitle,
+                                    stateLabel = when {
+                                        hasPlayerError -> "خطا در پخش"
+                                        !hasMediaItem -> "آمادهٔ انتخاب فایل"
+                                        playerState == Player.STATE_BUFFERING -> "در حال بارگذاری"
+                                        playerState == Player.STATE_ENDED -> "پخش به پایان رسید"
+                                        isPlaying -> "در حال پخش"
+                                        playerState == Player.STATE_READY -> "مکث‌شده"
+                                        else -> status
+                                    },
+                                    isPlaying = isSessionPlaying,
+                                    isBuffering = playerState == Player.STATE_BUFFERING,
+                                    hasError = hasPlayerError,
+                                    hasMedia = hasMediaItem,
+                                    positionMs = positionMs,
+                                    durationMs = durationMs,
+                                    onPlayPause = { togglePlayback() },
+                                    onSeek = { requestedPosition -> controller?.seekTo(requestedPosition.coerceIn(0L, durationMs)) },
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                Button(
+                                    onClick = { openAudio.launch(arrayOf("audio/*")) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = AuralisColors.PrimaryBlue, contentColor = AuralisColors.BackgroundDeep),
+                                ) { Text("انتخاب فایل صوتی") }
                                 Spacer(Modifier.height(22.dp))
                                 Text("نسخهٔ آزمایشی · بدون سرور و حساب کاربری", color = AuralisColors.TextSecondary, fontSize = AuralisTypeScale.Caption, textAlign = TextAlign.Center)
                             }
