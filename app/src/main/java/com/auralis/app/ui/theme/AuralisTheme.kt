@@ -9,7 +9,6 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.sp
 
 private val AuralisDarkColorScheme = darkColorScheme(
     primary = AuralisColors.PrimaryBlue,
@@ -31,36 +30,43 @@ private val AuralisDarkColorScheme = darkColorScheme(
 
 private val AuralisTypography = Typography(
     displayLarge = TextStyle(
+        fontFamily = AuralisFontFamily,
         fontSize = AuralisTypeScale.HeroMax,
         fontWeight = FontWeight.Bold,
         lineHeight = AuralisLineHeight.Hero,
     ),
     headlineLarge = TextStyle(
+        fontFamily = AuralisFontFamily,
         fontSize = AuralisTypeScale.TitleLargeMax,
         fontWeight = FontWeight.SemiBold,
         lineHeight = AuralisLineHeight.TitleLarge,
     ),
     titleLarge = TextStyle(
+        fontFamily = AuralisFontFamily,
         fontSize = AuralisTypeScale.TitleMediumMax,
         fontWeight = FontWeight.SemiBold,
         lineHeight = AuralisLineHeight.TitleMedium,
     ),
     titleMedium = TextStyle(
+        fontFamily = AuralisFontFamily,
         fontSize = AuralisTypeScale.BodyLarge,
         fontWeight = FontWeight.SemiBold,
         lineHeight = AuralisLineHeight.BodyLarge,
     ),
     bodyLarge = TextStyle(
+        fontFamily = AuralisFontFamily,
         fontSize = AuralisTypeScale.BodyLarge,
         fontWeight = FontWeight.Normal,
         lineHeight = AuralisLineHeight.BodyLarge,
     ),
     bodyMedium = TextStyle(
+        fontFamily = AuralisFontFamily,
         fontSize = AuralisTypeScale.BodyMedium,
         fontWeight = FontWeight.Normal,
         lineHeight = AuralisLineHeight.BodyMedium,
     ),
     labelSmall = TextStyle(
+        fontFamily = AuralisFontFamily,
         fontSize = AuralisTypeScale.Caption,
         fontWeight = FontWeight.Normal,
         lineHeight = AuralisLineHeight.Caption,
@@ -68,7 +74,7 @@ private val AuralisTypography = Typography(
 )
 
 /**
- * Auralis theme: always dark + forced RTL for Persian UI.
+ * Auralis theme: always dark + forced RTL for Persian UI + Vazirmatn.
  */
 @Composable
 fun AuralisTheme(content: @Composable () -> Unit) {
