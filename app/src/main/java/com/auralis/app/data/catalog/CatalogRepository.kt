@@ -3,6 +3,7 @@ package com.auralis.app.data.catalog
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 
 /**
  * Catalog access. MVP uses an in-memory sample feed so Explore is not empty
@@ -15,10 +16,18 @@ class CatalogRepository {
 
     fun observePodcasts(): Flow<List<CatalogPodcast>> = podcasts.asStateFlow()
 
+    fun observePodcasts(category: String): Flow<List<CatalogPodcast>> =
+        podcasts.map { list ->
+            if (category == "همه") list
+            else list.filter { it.category == category }
+        }
+
     fun observeEpisodes(podcastId: String? = null): Flow<List<CatalogEpisode>> {
         if (podcastId == null) return episodes.asStateFlow()
-        return MutableStateFlow(episodes.value.filter { it.podcastId == podcastId }).asStateFlow()
+        return episodes.map { list -> list.filter { it.podcastId == podcastId } }
     }
+
+    fun getPodcast(id: String): CatalogPodcast? = podcasts.value.find { it.id == id }
 
     fun getEpisode(id: String): CatalogEpisode? = episodes.value.find { it.id == id }
 
@@ -30,6 +39,7 @@ class CatalogRepository {
                 description = "گفت‌وگوهای کوتاه تولیدشده با AI درباره معنا، اخلاق و آگاهی.",
                 isAiGenerated = true,
                 episodeCount = 2,
+                category = "فلسفه",
             ),
             CatalogPodcast(
                 id = "ai-science",
@@ -37,6 +47,15 @@ class CatalogRepository {
                 description = "اپیزودهای علمی کوتاه با روایت AI.",
                 isAiGenerated = true,
                 episodeCount = 1,
+                category = "علم",
+            ),
+            CatalogPodcast(
+                id = "ai-tech",
+                title = "مرزهای تکنولوژی",
+                description = "نگاهی به آینده ابزارها و مدل‌های زبانی.",
+                isAiGenerated = true,
+                episodeCount = 1,
+                category = "تکنولوژی",
             ),
         )
 
@@ -47,6 +66,7 @@ class CatalogRepository {
                 title = "آیا ماشین می‌تواند بفهمد؟",
                 description = "نمونه‌ی کاتالوگ — فایل صوتی هنوز به سرور وصل نیست.",
                 audioUrl = "",
+                durationMs = 12 * 60_000L,
                 isAiGenerated = true,
             ),
             CatalogEpisode(
@@ -55,6 +75,7 @@ class CatalogRepository {
                 title = "اخلاق تولید محتوا با AI",
                 description = "نمونه‌ی کاتالوگ — استریم در فاز بعد.",
                 audioUrl = "",
+                durationMs = 15 * 60_000L,
                 isAiGenerated = true,
             ),
             CatalogEpisode(
@@ -63,6 +84,16 @@ class CatalogRepository {
                 title = "سیاه‌چاله‌ها در ده دقیقه",
                 description = "نمونه‌ی کاتالوگ.",
                 audioUrl = "",
+                durationMs = 10 * 60_000L,
+                isAiGenerated = true,
+            ),
+            CatalogEpisode(
+                id = "ep-tech-1",
+                podcastId = "ai-tech",
+                title = "مدل‌های زبانی چه چیزی را بلدند؟",
+                description = "نمونه‌ی کاتالوگ.",
+                audioUrl = "",
+                durationMs = 18 * 60_000L,
                 isAiGenerated = true,
             ),
         )

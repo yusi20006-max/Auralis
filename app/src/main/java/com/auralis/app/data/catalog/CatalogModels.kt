@@ -10,6 +10,8 @@ data class CatalogPodcast(
     val coverUrl: String? = null,
     val isAiGenerated: Boolean = true,
     val episodeCount: Int = 0,
+    /** Used by Explore filter chips (e.g. فلسفه، علم). */
+    val category: String = "همه",
 )
 
 data class CatalogEpisode(

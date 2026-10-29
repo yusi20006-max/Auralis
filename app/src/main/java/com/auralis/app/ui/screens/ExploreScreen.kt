@@ -52,7 +52,23 @@ fun ExploreScreen(
     modifier: Modifier = Modifier,
 ) {
     var selectedCategory by remember { mutableStateOf("همه") }
-    val podcasts by catalogRepository.observePodcasts().collectAsState(initial = emptyList())
+    var selectedPodcast by remember { mutableStateOf<CatalogPodcast?>(null) }
+    val podcasts by catalogRepository.observePodcasts(selectedCategory)
+        .collectAsState(initial = emptyList())
+
+    val podcast = selectedPodcast
+    if (podcast != null) {
+        CatalogPodcastDetailScreen(
+            podcast = podcast,
+            catalogRepository = catalogRepository,
+            onBack = { selectedPodcast = null },
+            onEpisodeClick = {
+                // Streaming not wired yet — detail still shows episode list.
+            },
+            modifier = modifier,
+        )
+        return
+    }
 
     LazyColumn(
         modifier = modifier
@@ -101,22 +117,25 @@ fun ExploreScreen(
 
         item {
             Text(
-                text = "کاتالوگ AI (نمونه)",
+                text = "کاتالوگ AI",
                 color = AuralisColors.TextPrimary,
                 fontSize = AuralisTypeScale.TitleMediumMin,
                 fontWeight = FontWeight.SemiBold,
             )
             Spacer(modifier = Modifier.height(AuralisSpacing.X2))
             Text(
-                text = "این فهرست نمونه است؛ استریم از سرور در مرحله بعد وصل می‌شود.",
+                text = "پادکست را باز کن تا اپیزودها را ببینی. پخش آنلاین به‌زودی.",
                 color = AuralisColors.TextTertiary,
                 fontSize = AuralisTypeScale.Caption,
             )
             Spacer(modifier = Modifier.height(AuralisSpacing.X3))
         }
 
-        items(podcasts, key = { it.id }) { podcast ->
-            CatalogPodcastRow(podcast = podcast)
+        items(podcasts, key = { it.id }) { item ->
+            CatalogPodcastRow(
+                podcast = item,
+                onClick = { selectedPodcast = item },
+            )
             Spacer(modifier = Modifier.height(AuralisSpacing.X3))
         }
 
@@ -160,8 +179,12 @@ fun ExploreScreen(
 }
 
 @Composable
-private fun CatalogPodcastRow(podcast: CatalogPodcast) {
+private fun CatalogPodcastRow(
+    podcast: CatalogPodcast,
+    onClick: () -> Unit,
+) {
     Surface(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         color = AuralisColors.Surface,
         shape = RoundedCornerShape(AuralisCorners.Card),
