@@ -1,5 +1,7 @@
 package com.auralis.app
 
+import android.app.PendingIntent
+import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -8,10 +10,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
 /**
- * Background playback service (Phase 2 hardening base).
- * - Media audio attributes for podcast/speech
- * - Pause when headphones unplugged / BT disconnect (becoming noisy)
- * - MediaSession exposes lock-screen + notification controls via Media3
+ * Background playback with notification + lock-screen controls (Media3 session).
  */
 class PlaybackService : MediaSessionService() {
 
@@ -25,13 +24,25 @@ class PlaybackService : MediaSessionService() {
                     .setUsage(C.USAGE_MEDIA)
                     .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)
                     .build(),
-                /* handleAudioFocus= */ true,
+                /* handleAudioFocus = */ true,
             )
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
         player.repeatMode = Player.REPEAT_MODE_OFF
-        mediaSession = MediaSession.Builder(this, player).build()
+
+        val sessionActivity = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        mediaSession = MediaSession.Builder(this, player)
+            .setSessionActivity(sessionActivity)
+            .build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
