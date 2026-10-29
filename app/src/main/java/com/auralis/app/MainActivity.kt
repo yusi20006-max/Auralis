@@ -329,7 +329,13 @@ class MainActivity : ComponentActivity() {
                 // the controls, and scroll the column so nothing is ever clipped on a short
                 // window, split-screen or a large font scale. With the bar hidden this is the
                 // exact padding the screen had on main.
-                val bottomInset = if (miniPlayerVisible) AuralisSpacing.X6 + AuralisSpacing.MiniPlayerMaxHeight else AuralisSpacing.X6
+                // The mini-player modifier adds X6 padding on both top and bottom, so reserve both gaps
+                // as well as the bar height; omitting the second gap lets the last controls sit under it.
+                val bottomInset = if (miniPlayerVisible) {
+                    AuralisSpacing.X6 + AuralisSpacing.MiniPlayerMaxHeight + AuralisSpacing.X6
+                } else {
+                    AuralisSpacing.X6
+                }
 
                 Surface(Modifier.fillMaxSize(), color = AuralisColors.BackgroundDeep) {
                     Box(Modifier.fillMaxSize().background(background)) {
