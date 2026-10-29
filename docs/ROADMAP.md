@@ -3,55 +3,33 @@
 ## Phase 0 — Project foundation
 
 - [x] Create the independent Auralis repository.
-- [x] Define initial product scope.
-- [x] Record provisional brand direction.
-- [x] Outline offline-first architecture.
-- [x] Create a baseline Android build and CI workflow.
-- [x] Adaptive app icon (vector; PNG brand asset can still replace).
-- [x] Gradle Wrapper scripts + properties (JAR bootstrapped in CI / `scripts/bootstrap-wrapper.sh`).
-- [ ] Commit logo source PNG asset and document its origin.
-- [ ] Decide final Android application ID before public distribution.
+- [x] Define initial product scope and brand direction.
+- [x] Baseline Android build + CI.
+- [x] Gradle Wrapper bootstrap.
+- [x] Launcher icon pipeline (owner brand mark installed in CI).
+- [ ] Commit logo PNG permanently under `scripts/icon-assets/` (replace temp URL).
+- [ ] Final applicationId before public store release.
 
-## Phase 1 — Offline MVP  ✅ milestone for batch device test
+## Phase 1 — Offline MVP ✅
 
-- [x] Import local audio through Android's file picker.
-- [x] Build the library and episode information model (Room).
-- [x] Implement persistent playback service and media session (Media3).
-- [x] Implement player screen and essential controls (seek, ±15s, speed).
-- [x] Persist playback position and library list.
-- [x] Apply the Auralis design system and Persian RTL layout.
-- [x] Mini player, Explore / Profile / Settings shells.
-- [x] Episode delete from library.
-- [x] Now Playing safe-area / larger hit targets / LTR speed labels.
-- [x] Vazirmatn via Google Fonts downloadable provider.
-- [x] Playback error banner with re-import action.
-- [ ] Official brand PNG as launcher icon (vector is interim).
-- [ ] Stronger TalkBack coverage and large-font stress test.
-- [ ] Broader automated UI / integration tests.
+- [x] Local import, Room library, Media3 session, Now Playing, Mini Player.
+- [x] Speed control, delete episode, RTL, Vazirmatn, error banner.
+- [x] Safe-area top bar / LTR speed labels.
 
-## Phase 2 — Hardening
+## Phase 2 — Hardening (in progress)
 
-- [ ] Test small screens, large fonts, orientation changes, and TalkBack.
-- [ ] Test Bluetooth/headset controls, audio focus, interruptions, and notification behavior.
-- [ ] Measure startup, scrolling, memory use, and playback responsiveness.
-- [ ] Produce a signed release/test build and document installation.
-- [ ] Deeper error recovery when a URI grant is lost or file is missing.
+- [x] Audio focus handling + pause on becoming noisy (headset unplug).
+- [x] Local wake lock while playing (`WAKE_MODE_LOCAL`).
+- [ ] Device matrix: small screens, large fonts, rotation, TalkBack.
+- [ ] Bluetooth / headset media buttons verification.
+- [ ] Notification + lock-screen control verification on real devices.
+- [ ] Signed release/test APK + install notes.
+- [ ] Permanent brand PNG in-repo (no temp CDN).
 
-## Phase 3 — Hosted podcast catalog
+## Phase 3 — Hosted catalog
 
-- [ ] Define catalog API and versioned episode metadata.
-- [ ] Select hosting and file storage based on real usage and budget.
-- [ ] Add catalog browsing and streaming.
-- [ ] Add explicit episode downloads and download-state UI.
-- [ ] Verify local playback works without network access.
-- [ ] Add authentication only if content access requires it.
+- [ ] Catalog API, browse, stream, offline download.
 
-## Phase 4 — Publishing workflow
+## Phase 4 — Publishing
 
-- [ ] Define how AI-generated episodes and artwork are uploaded.
-- [ ] Add a minimal publishing process or admin tool if needed.
-- [ ] Document backups, retention, monitoring, and operating costs.
-
-## Delivery rule
-
-Each phase should be delivered through reviewable changes with build/test evidence. Do not mark device-level behavior verified based on a successful CI build alone.
+- [ ] AI episode upload / admin workflow when needed.
