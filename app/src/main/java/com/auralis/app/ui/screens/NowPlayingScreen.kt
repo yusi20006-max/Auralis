@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -123,6 +122,7 @@ fun NowPlayingScreen(
                             color = AuralisColors.PrimaryBlue,
                             fontSize = AuralisTypeScale.Caption,
                             fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
                         )
                     }
                 }
@@ -155,17 +155,20 @@ fun NowPlayingScreen(
             },
         )
 
-        Spacer(modifier = Modifier.height(AuralisSpacing.X6))
+        Spacer(modifier = Modifier.height(AuralisSpacing.X4))
 
         Text(
             text = title,
             color = AuralisColors.TextPrimary,
-            fontSize = AuralisTypeScale.HeroMax,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = AuralisTypeScale.BodyLarge,
+            fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
-            maxLines = 2,
+            maxLines = 5,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth(),
+            lineHeight = AuralisTypeScale.BodyLarge * 1.35f,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = AuralisSpacing.X2),
         )
 
         if (!episode?.podcastName.isNullOrBlank()) {
@@ -173,8 +176,10 @@ fun NowPlayingScreen(
             Text(
                 text = episode?.podcastName.orEmpty(),
                 color = AuralisColors.TextSecondary,
-                fontSize = AuralisTypeScale.BodyMedium,
+                fontSize = AuralisTypeScale.Caption,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
 
@@ -304,6 +309,7 @@ fun NowPlayingScreen(
                                 text = formatSpeedLabel(speed),
                                 fontSize = AuralisTypeScale.Caption,
                                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                maxLines = 1,
                             )
                         },
                         colors = FilterChipDefaults.filterChipColors(
@@ -321,12 +327,15 @@ fun NowPlayingScreen(
 }
 
 private fun formatSpeedLabel(speed: Float): String {
-    return if (speed == 1.0f) "1x" else "${speed}x"
+    return when {
+        kotlin.math.abs(speed - speed.toInt().toFloat()) < 0.01f -> "${speed.toInt()}x"
+        else -> String.format("%.2gx", speed)
+    }
 }
 
 private fun formatTime(ms: Long): String {
     if (ms <= 0L) return "0:00"
-    val totalSec = ms / 1000
+    val totalSec = (ms / 1000).coerceAtLeast(0)
     val m = totalSec / 60
     val s = totalSec % 60
     return "%d:%02d".format(m, s)
