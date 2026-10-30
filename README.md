@@ -14,7 +14,7 @@
 | CI APKs (debug + release) | Done |
 | Brand icon (CI install script) | Done |
 | Hosted API / real CDN | Later (#14+) |
-| Store license / production keystore | Owner (#13) |
+| Production keystore in CI Secrets | Optional (owner) |
 
 See [docs/RELEASE.md](docs/RELEASE.md) for install, upgrade, and signing notes.
 
@@ -34,4 +34,6 @@ CI also runs `scripts/install-brand-icons.sh` before assemble.
 
 ## License
 
-Not selected yet (owner decision).
+**All Rights Reserved** — see [LICENSE](LICENSE).
+Proprietary software; redistribution or reuse requires prior written permission
+from the copyright holder. Third-party libraries keep their own licenses.
