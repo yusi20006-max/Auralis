@@ -28,6 +28,7 @@ import com.auralis.app.data.Episode
 import com.auralis.app.data.LibraryRepository
 import com.auralis.app.data.LocalUriAccess
 import com.auralis.app.data.PlaybackPreferences
+import com.auralis.app.playback.PlaybackErrorMapper
 import com.auralis.app.ui.components.AuralisErrorBanner
 import com.auralis.app.ui.components.AuralisMiniPlayer
 import com.auralis.app.ui.components.ExploreNavIcon
@@ -259,13 +260,7 @@ class MainActivity : ComponentActivity() {
                         override fun onPlayerError(error: PlaybackException) {
                             isPlaying = false
                             hasPlayerError = true
-                            playerErrorMessage = when (error.errorCode) {
-                                PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
-                                PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
-                                PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED,
-                                -> LocalUriAccess.unreadableLocalMessage()
-                                else -> "پخش متوقف شد: ${error.message ?: "خطای ناشناخته"}"
-                            }
+                            playerErrorMessage = PlaybackErrorMapper.userMessage(error)
                         }
                     })
 
