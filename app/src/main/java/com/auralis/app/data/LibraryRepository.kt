@@ -62,10 +62,7 @@ class LibraryRepository internal constructor(
         durationMs: Long = 0L,
         artworkUri: Uri? = null,
     ): Episode {
-        val existing = dao.getByLocalUri(uri.toString())
-        if (existing != null) return existing.toEpisode()
-
-        val episode = Episode(
+        val candidate = Episode(
             id = UUID.randomUUID().toString(),
             title = title.ifBlank { "اپیزود بدون عنوان" },
             podcastName = "Auralis",
@@ -74,8 +71,8 @@ class LibraryRepository internal constructor(
             localUri = uri,
             isAiGenerated = true,
         )
-        dao.upsert(EpisodeEntity.from(episode))
-        return episode
+        // Room @Transaction: concurrent imports of the same URI cannot double-insert.
+        return dao.getOrInsertLocalEpisode(EpisodeEntity.from(candidate)).toEpisode()
     }
 
     fun addOrGetStreamEpisode(
@@ -121,7 +118,7 @@ class LibraryRepository internal constructor(
 
     /**
      * Download into private storage. Safe to call again (retry).
-     * Concurrent calls for the same remoteId are serialized / ignored if already running.
+     * Concurrent calls for the same remoteId are serialized.
      */
     suspend fun downloadEpisodeOffline(
         catalogEpisode: CatalogEpisode,
@@ -156,7 +153,7 @@ class LibraryRepository internal constructor(
             } catch (_: DownloadCancelledException) {
                 _lastDownloadError.value = null
                 null
-            } catch (e: InsufficientSpaceException) {
+            } catch (_: InsufficientSpaceException) {
                 _lastDownloadError.value = "فضای ذخیره‌سازی کافی نیست."
                 null
             } catch (_: Exception) {
