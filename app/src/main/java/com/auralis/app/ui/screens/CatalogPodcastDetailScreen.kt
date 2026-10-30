@@ -27,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,7 +67,10 @@ fun CatalogPodcastDetailScreen(
                 .padding(vertical = AuralisSpacing.X3),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onBack) {
+            TextButton(
+                onClick = onBack,
+                modifier = Modifier.semantics { contentDescription = "بازگشت به فهرست کشف" },
+            ) {
                 Text("بازگشت", color = AuralisColors.TextSecondary)
             }
             Spacer(modifier = Modifier.weight(1f))
@@ -80,7 +85,8 @@ fun CatalogPodcastDetailScreen(
                         Brush.linearGradient(
                             listOf(AuralisColors.PrimaryBlue, AuralisColors.PrimaryViolet),
                         ),
-                    ),
+                    )
+                    .semantics { contentDescription = "جلد پادکست ${podcast.title}" },
                 contentAlignment = Alignment.Center,
             ) {
                 Text("A", color = Color.White, fontWeight = FontWeight.Bold)
@@ -156,7 +162,18 @@ private fun EpisodeRow(
 ) {
     val canStream = episode.audioUrl.isNotBlank()
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                contentDescription = buildString {
+                    append(episode.title)
+                    when {
+                        isDownloaded -> append(". دانلود شده، آماده پخش آفلاین")
+                        isDownloading -> append(". در حال دانلود")
+                        else -> append(". قابل پخش آنلاین یا دانلود خصوصی")
+                    }
+                }
+            },
         color = AuralisColors.Surface,
         shape = RoundedCornerShape(AuralisCorners.Card),
     ) {
@@ -185,7 +202,9 @@ private fun EpisodeRow(
                 if (p != null && p > 0f) {
                     LinearProgressIndicator(
                         progress = { p },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { contentDescription = "پیشرفت دانلود ${(p * 100).toInt()} درصد" },
                         color = AuralisColors.PrimaryBlue,
                         trackColor = AuralisColors.SurfaceElevated,
                     )
@@ -196,7 +215,9 @@ private fun EpisodeRow(
                     )
                 } else {
                     LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { contentDescription = "در حال دانلود" },
                         color = AuralisColors.PrimaryBlue,
                         trackColor = AuralisColors.SurfaceElevated,
                     )
@@ -209,7 +230,13 @@ private fun EpisodeRow(
             }
             Spacer(modifier = Modifier.height(AuralisSpacing.X2))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onPlay, enabled = canStream) {
+                TextButton(
+                    onClick = onPlay,
+                    enabled = canStream,
+                    modifier = Modifier.semantics {
+                        contentDescription = if (isDownloaded) "پخش آفلاین ${episode.title}" else "پخش آنلاین ${episode.title}"
+                    },
+                ) {
                     Text(
                         text = if (isDownloaded) "▶ پخش آفلاین" else "▶ پخش آنلاین",
                         color = if (canStream) AuralisColors.PrimaryBlue else AuralisColors.TextTertiary,
@@ -217,7 +244,10 @@ private fun EpisodeRow(
                     )
                 }
                 if (isDownloading) {
-                    TextButton(onClick = onCancel) {
+                    TextButton(
+                        onClick = onCancel,
+                        modifier = Modifier.semantics { contentDescription = "لغو دانلود ${episode.title}" },
+                    ) {
                         Text(
                             text = "لغو",
                             color = AuralisColors.Error,
@@ -228,6 +258,13 @@ private fun EpisodeRow(
                     TextButton(
                         onClick = onDownload,
                         enabled = canStream && !isDownloaded,
+                        modifier = Modifier.semantics {
+                            contentDescription = if (isDownloaded) {
+                                "دانلود شده ${episode.title}"
+                            } else {
+                                "دانلود خصوصی ${episode.title}"
+                            }
+                        },
                     ) {
                         Text(
                             text = if (isDownloaded) "✓ دانلود شده" else "↓ دانلود خصوصی",
