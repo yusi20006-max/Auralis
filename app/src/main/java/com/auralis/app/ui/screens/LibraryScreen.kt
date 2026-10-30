@@ -3,6 +3,7 @@ package com.auralis.app.ui.screens
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,9 +17,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -42,6 +46,12 @@ import com.auralis.app.ui.theme.AuralisCorners
 import com.auralis.app.ui.theme.AuralisSpacing
 import com.auralis.app.ui.theme.AuralisTypeScale
 
+private enum class LibraryFilter {
+    All,
+    Downloaded,
+    LocalFiles,
+}
+
 @Composable
 fun LibraryScreen(
     episodes: List<Episode>,
@@ -51,6 +61,19 @@ fun LibraryScreen(
     modifier: Modifier = Modifier,
 ) {
     var pendingDelete by remember { mutableStateOf<Episode?>(null) }
+    var filter by remember { mutableStateOf(LibraryFilter.All) }
+
+    val downloaded = remember(episodes) {
+        episodes.filter { it.remoteId != null && it.localUri != null }
+    }
+    val localOnly = remember(episodes) {
+        episodes.filter { it.remoteId == null && it.localUri != null }
+    }
+    val visible = when (filter) {
+        LibraryFilter.All -> episodes
+        LibraryFilter.Downloaded -> downloaded
+        LibraryFilter.LocalFiles -> localOnly
+    }
 
     Column(
         modifier = modifier
@@ -83,12 +106,53 @@ fun LibraryScreen(
             }
         }
 
-        if (episodes.isEmpty()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(AuralisSpacing.X2),
+        ) {
+            LibraryFilterChip(
+                label = "همه (${episodes.size})",
+                selected = filter == LibraryFilter.All,
+                onClick = { filter = LibraryFilter.All },
+            )
+            LibraryFilterChip(
+                label = "دانلود شده‌ها (${downloaded.size})",
+                selected = filter == LibraryFilter.Downloaded,
+                onClick = { filter = LibraryFilter.Downloaded },
+            )
+            LibraryFilterChip(
+                label = "فایل‌های من (${localOnly.size})",
+                selected = filter == LibraryFilter.LocalFiles,
+                onClick = { filter = LibraryFilter.LocalFiles },
+            )
+        }
+        Spacer(modifier = Modifier.height(AuralisSpacing.X3))
+
+        if (visible.isEmpty()) {
+            val (title, subtitle, action) = when (filter) {
+                LibraryFilter.Downloaded -> Triple(
+                    "هنوز دانلود خصوصی ندارید",
+                    "از بخش کشف یک اپیزود را با «دانلود خصوصی» ذخیره کنید. فایل در مدیریت فایل گوشی دیده نمی‌شود.",
+                    null,
+                )
+                LibraryFilter.LocalFiles -> Triple(
+                    "فایل محلی نیست",
+                    "از حافظه گوشی فایل صوتی اضافه کنید.",
+                    "افزودن فایل صوتی",
+                )
+                LibraryFilter.All -> Triple(
+                    "هنوز چیزی ذخیره نکرده‌اید",
+                    "فایل محلی اضافه کنید یا از کشف دانلود خصوصی بگیرید.",
+                    "افزودن فایل صوتی",
+                )
+            }
             AuralisEmptyState(
-                title = "هنوز چیزی ذخیره نکرده‌اید",
-                subtitle = "فایل‌های صوتی پادکست‌های AI را از حافظه گوشی اضافه کنید و آفلاین گوش دهید.",
-                actionLabel = "افزودن فایل صوتی",
-                onAction = onImportClick,
+                title = title,
+                subtitle = subtitle,
+                actionLabel = action,
+                onAction = if (action != null) onImportClick else null,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
@@ -96,9 +160,44 @@ fun LibraryScreen(
                 verticalArrangement = Arrangement.spacedBy(AuralisSpacing.X3),
                 contentPadding = PaddingValues(bottom = 100.dp),
             ) {
-                items(episodes, key = { it.id }) { episode ->
+                if (filter == LibraryFilter.All && downloaded.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "دانلود شده‌ها",
+                            color = AuralisColors.TextSecondary,
+                            fontSize = AuralisTypeScale.Caption,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(bottom = AuralisSpacing.X2),
+                        )
+                    }
+                    items(downloaded, key = { "dl-${it.id}" }) { episode ->
+                        EpisodeListItem(
+                            episode = episode,
+                            badge = "آفلاین",
+                            onClick = { onEpisodeClick(episode) },
+                            onLongClick = { pendingDelete = episode },
+                        )
+                    }
+                    item {
+                        Spacer(modifier = Modifier.height(AuralisSpacing.X2))
+                        Text(
+                            text = "همه موارد",
+                            color = AuralisColors.TextSecondary,
+                            fontSize = AuralisTypeScale.Caption,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(vertical = AuralisSpacing.X2),
+                        )
+                    }
+                }
+                items(visible, key = { it.id }) { episode ->
+                    val badge = when {
+                        episode.remoteId != null && episode.localUri != null -> "آفلاین"
+                        episode.remoteId != null -> "استریم"
+                        else -> null
+                    }
                     EpisodeListItem(
                         episode = episode,
+                        badge = badge,
                         onClick = { onEpisodeClick(episode) },
                         onLongClick = { pendingDelete = episode },
                     )
@@ -134,10 +233,31 @@ fun LibraryScreen(
     }
 }
 
+@Composable
+private fun LibraryFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(text = label, fontSize = AuralisTypeScale.Caption) },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = AuralisColors.PrimaryBlue,
+            selectedLabelColor = AuralisColors.BackgroundDeep,
+            containerColor = AuralisColors.SurfaceElevated,
+            labelColor = AuralisColors.TextSecondary,
+        ),
+        shape = RoundedCornerShape(AuralisCorners.Button),
+    )
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EpisodeListItem(
     episode: Episode,
+    badge: String? = null,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
@@ -192,6 +312,14 @@ private fun EpisodeListItem(
                         Text(
                             text = "AI",
                             color = AuralisColors.AccentCyan,
+                            fontSize = AuralisTypeScale.Caption,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                    if (badge != null) {
+                        Text(
+                            text = badge,
+                            color = AuralisColors.PrimaryBlue,
                             fontSize = AuralisTypeScale.Caption,
                             fontWeight = FontWeight.Medium,
                         )

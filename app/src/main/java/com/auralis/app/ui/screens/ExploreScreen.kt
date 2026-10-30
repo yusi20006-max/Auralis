@@ -1,5 +1,6 @@
 package com.auralis.app.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -64,6 +65,7 @@ fun ExploreScreen(
 
     val podcast = selectedPodcast
     if (podcast != null) {
+        BackHandler { selectedPodcast = null }
         CatalogPodcastDetailScreen(
             podcast = podcast,
             catalogRepository = catalogRepository,
