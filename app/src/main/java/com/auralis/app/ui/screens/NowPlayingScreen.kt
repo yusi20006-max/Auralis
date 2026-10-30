@@ -32,6 +32,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,6 +64,7 @@ fun NowPlayingScreen(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val title = episode?.title?.takeIf { it.isNotBlank() } ?: "بدون عنوان"
     val progress = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
 
     Column(
@@ -70,7 +76,6 @@ fun NowPlayingScreen(
             .padding(horizontal = AuralisSpacing.X6),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Top bar: fully below status bar, large touch targets
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -80,7 +85,9 @@ fun NowPlayingScreen(
         ) {
             TextButton(
                 onClick = onClose,
-                modifier = Modifier.height(48.dp),
+                modifier = Modifier
+                    .height(48.dp)
+                    .semantics { contentDescription = "بستن صفحه پخش" },
             ) {
                 Text(
                     text = "بستن",
@@ -90,16 +97,22 @@ fun NowPlayingScreen(
                 )
             }
             Text(
-                text = "در حال پخش",
+                text = if (isPlaying) "در حال پخش" else "متوقف",
                 color = AuralisColors.TextSecondary,
                 fontSize = AuralisTypeScale.Caption,
+                modifier = Modifier.semantics {
+                    contentDescription = if (isPlaying) "وضعیت: در حال پخش" else "وضعیت: متوقف"
+                },
             )
-            // Force LTR so "1x" does not render as "x.1" under RTL
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 Surface(
                     color = AuralisColors.SurfaceElevated,
                     shape = RoundedCornerShape(AuralisCorners.Small),
-                    modifier = Modifier.height(40.dp),
+                    modifier = Modifier
+                        .height(40.dp)
+                        .semantics {
+                            contentDescription = "سرعت فعلی ${formatSpeedLabel(playbackSpeed)}"
+                        },
                 ) {
                     Box(
                         contentAlignment = Alignment.Center,
@@ -126,7 +139,11 @@ fun NowPlayingScreen(
                     Brush.linearGradient(
                         colors = listOf(AuralisColors.PrimaryBlue, AuralisColors.PrimaryViolet),
                     ),
-                ),
+                )
+                .semantics {
+                    contentDescription = "جلد اپیزود"
+                    stateDescription = title
+                },
             contentAlignment = Alignment.Center,
             content = {
                 Text(
@@ -138,60 +155,63 @@ fun NowPlayingScreen(
             },
         )
 
-        Spacer(modifier = Modifier.height(AuralisSpacing.X3))
+        Spacer(modifier = Modifier.height(AuralisSpacing.X6))
 
         Text(
-            text = episode?.title ?: "هیچ اپیزودی انتخاب نشده",
+            text = title,
             color = AuralisColors.TextPrimary,
-            fontSize = AuralisTypeScale.TitleMediumMax,
+            fontSize = AuralisTypeScale.HeroMax,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(modifier = Modifier.height(AuralisSpacing.X2))
-        Text(
-            text = episode?.podcastName ?: "Auralis",
-            color = AuralisColors.TextSecondary,
-            fontSize = AuralisTypeScale.BodyMedium,
-        )
-        if (episode?.isAiGenerated == true) {
+
+        if (!episode?.podcastName.isNullOrBlank()) {
             Spacer(modifier = Modifier.height(AuralisSpacing.X2))
-            Surface(
-                color = AuralisColors.AccentCyan.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(AuralisCorners.Small),
-            ) {
-                Text(
-                    text = "AI Generated",
-                    color = AuralisColors.AccentCyan,
-                    fontSize = AuralisTypeScale.Caption,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                )
-            }
+            Text(
+                text = episode?.podcastName.orEmpty(),
+                color = AuralisColors.TextSecondary,
+                fontSize = AuralisTypeScale.BodyMedium,
+                textAlign = TextAlign.Center,
+            )
         }
+
+        Spacer(modifier = Modifier.height(AuralisSpacing.X4))
+
+        AuralisWaveform(
+            progress = progress.coerceIn(0f, 1f),
+            isPlaying = isPlaying,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+        )
 
         Spacer(modifier = Modifier.height(AuralisSpacing.X3))
 
-        AuralisWaveform(
-            isPlaying = isPlaying,
-            progress = progress,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Spacer(modifier = Modifier.height(AuralisSpacing.X2))
-
         Slider(
-            value = progress.coerceIn(0f, 1f),
+            value = if (durationMs > 0) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f,
             onValueChange = { fraction ->
-                onSeek((fraction * durationMs).toLong())
+                if (durationMs > 0) onSeek((fraction * durationMs).toLong())
             },
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics {
+                    contentDescription = "موقعیت پخش"
+                    stateDescription = if (durationMs > 0) {
+                        "${formatTime(positionMs)} از ${formatTime(durationMs)}"
+                    } else {
+                        "مدت نامشخص"
+                    }
+                },
             colors = SliderDefaults.colors(
                 thumbColor = AuralisColors.PrimaryBlue,
-                activeTrackColor = AuralisColors.PrimaryViolet,
+                activeTrackColor = AuralisColors.PrimaryBlue,
                 inactiveTrackColor = AuralisColors.SurfaceElevated,
             ),
-            modifier = Modifier.fillMaxWidth(),
         )
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -220,14 +240,21 @@ fun NowPlayingScreen(
         ) {
             TextButton(
                 onClick = { onSeek((positionMs - 15_000).coerceAtLeast(0)) },
-                modifier = Modifier.height(48.dp),
+                modifier = Modifier
+                    .height(48.dp)
+                    .semantics { contentDescription = "۱۵ ثانیه به عقب" },
             ) {
                 Text("-۱۵", color = AuralisColors.TextSecondary, fontSize = AuralisTypeScale.BodyMedium)
             }
 
             FilledIconButton(
                 onClick = onPlayPause,
-                modifier = Modifier.size(AuralisSpacing.NowPlayingControlMax),
+                modifier = Modifier
+                    .size(AuralisSpacing.NowPlayingControlMax)
+                    .semantics {
+                        role = Role.Button
+                        contentDescription = if (isPlaying) "مکث پخش" else "شروع پخش"
+                    },
                 colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = AuralisColors.PrimaryBlue,
                     contentColor = AuralisColors.BackgroundDeep,
@@ -242,7 +269,9 @@ fun NowPlayingScreen(
 
             TextButton(
                 onClick = { onSeek((positionMs + 15_000).coerceAtMost(durationMs.coerceAtLeast(0))) },
-                modifier = Modifier.height(48.dp),
+                modifier = Modifier
+                    .height(48.dp)
+                    .semantics { contentDescription = "۱۵ ثانیه به جلو" },
             ) {
                 Text("+۱۵", color = AuralisColors.TextSecondary, fontSize = AuralisTypeScale.BodyMedium)
             }
@@ -266,6 +295,10 @@ fun NowPlayingScreen(
                     FilterChip(
                         selected = selected,
                         onClick = { onSpeedChange(speed) },
+                        modifier = Modifier.semantics {
+                            contentDescription = "سرعت پخش ${formatSpeedLabel(speed)}"
+                            stateDescription = if (selected) "انتخاب‌شده" else "انتخاب‌نشده"
+                        },
                         label = {
                             Text(
                                 text = formatSpeedLabel(speed),
@@ -288,16 +321,13 @@ fun NowPlayingScreen(
 }
 
 private fun formatSpeedLabel(speed: Float): String {
-    return if (speed == speed.toInt().toFloat()) {
-        "${speed.toInt()}x"
-    } else {
-        String.format("%.2gx", speed)
-    }
+    return if (speed == 1.0f) "1x" else "${speed}x"
 }
 
 private fun formatTime(ms: Long): String {
-    val totalSeconds = (ms / 1000).coerceAtLeast(0).toInt()
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return "%d:%02d".format(minutes, seconds)
+    if (ms <= 0L) return "0:00"
+    val totalSec = ms / 1000
+    val m = totalSec / 60
+    val s = totalSec % 60
+    return "%d:%02d".format(m, s)
 }
