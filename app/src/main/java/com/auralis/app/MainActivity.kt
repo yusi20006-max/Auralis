@@ -296,6 +296,7 @@ class MainActivity : ComponentActivity() {
                 val playbackSpeed by playbackPreferences.speed.collectAsState()
                 val downloadingRemoteIds by libraryRepository.downloadingRemoteIds.collectAsState()
                 val downloadProgress by libraryRepository.downloadProgress.collectAsState()
+                val lastDownloadError by libraryRepository.lastDownloadError.collectAsState()
                 val downloadedRemoteIds = episodes.mapNotNull { ep ->
                     ep.remoteId?.takeIf { libraryRepository.isDownloaded(it) }
                 }.toSet()
@@ -412,14 +413,16 @@ class MainActivity : ComponentActivity() {
                                 },
                             ) { padding ->
                                 Column(Modifier.padding(padding).fillMaxSize()) {
-                                    if (hasPlayerError) {
+                                    if (hasPlayerError || lastDownloadError != null) {
                                         AuralisErrorBanner(
                                             message = playerErrorMessage
+                                                ?: lastDownloadError
                                                 ?: "پخش یا دانلود ممکن نشد. اتصال یا فایل را بررسی کنید.",
                                             actionLabel = "باشه",
                                             onAction = {
                                                 hasPlayerError = false
                                                 playerErrorMessage = null
+                                                libraryRepository.clearDownloadError()
                                             },
                                             modifier = Modifier.padding(
                                                 horizontal = AuralisSpacing.X4,
@@ -464,15 +467,14 @@ class MainActivity : ComponentActivity() {
                                                     onDownloadEpisode = { podcast, catalogEpisode ->
                                                         if (catalogEpisode.audioUrl.isBlank()) return@ExploreScreen
                                                         lifecycleScope.launch {
-                                                            val episode = libraryRepository.downloadEpisodeOffline(
+                                                            libraryRepository.downloadEpisodeOffline(
                                                                 catalogEpisode = catalogEpisode,
                                                                 podcast = podcast,
                                                             )
-                                                            if (episode == null) {
-                                                                hasPlayerError = true
-                                                                playerErrorMessage = "دانلود انجام نشد. اتصال را بررسی کنید."
-                                                            }
                                                         }
+                                                    },
+                                                    onCancelDownload = { _, catalogEpisode ->
+                                                        libraryRepository.cancelDownload(catalogEpisode.id)
                                                     },
                                                 )
                                             }
