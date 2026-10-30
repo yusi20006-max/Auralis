@@ -1,0 +1,32 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "0009362eb2a194ed139e63c0750adb14",
+    "entities": [
+      {
+        "tableName": "episodes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `podcastName` TEXT NOT NULL, `description` TEXT NOT NULL, `durationMs` INTEGER NOT NULL, `artworkUri` TEXT, `localUri` TEXT, `remoteId` TEXT, `audioUrl` TEXT, `isAiGenerated` INTEGER NOT NULL, `lastPositionMs` INTEGER NOT NULL, `lastPlayedAt` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {"fieldPath":"id","columnName":"id","affinity":"TEXT","notNull":true},
+          {"fieldPath":"title","columnName":"title","affinity":"TEXT","notNull":true},
+          {"fieldPath":"podcastName","columnName":"podcastName","affinity":"TEXT","notNull":true},
+          {"fieldPath":"description","columnName":"description","affinity":"TEXT","notNull":true},
+          {"fieldPath":"durationMs","columnName":"durationMs","affinity":"INTEGER","notNull":true},
+          {"fieldPath":"artworkUri","columnName":"artworkUri","affinity":"TEXT"},
+          {"fieldPath":"localUri","columnName":"localUri","affinity":"TEXT"},
+          {"fieldPath":"remoteId","columnName":"remoteId","affinity":"TEXT"},
+          {"fieldPath":"audioUrl","columnName":"audioUrl","affinity":"TEXT"},
+          {"fieldPath":"isAiGenerated","columnName":"isAiGenerated","affinity":"INTEGER","notNull":true},
+          {"fieldPath":"lastPositionMs","columnName":"lastPositionMs","affinity":"INTEGER","notNull":true},
+          {"fieldPath":"lastPlayedAt","columnName":"lastPlayedAt","affinity":"INTEGER"}
+        ],
+        "primaryKey":{"autoGenerate":false,"columnNames":["id"]}
+      }
+    ],
+    "setupQueries":[
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0009362eb2a194ed139e63c0750adb14')"
+    ]
+  }
+}
