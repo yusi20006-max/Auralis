@@ -1,32 +1,25 @@
 # Auralis Roadmap
 
-Last updated against `main` (download cancel / error mapper / private storage).
+## v0.1.0 (code complete on main)
 
-## Product capability (code)
+- [x] Offline library + Media3 playback + UI (Library, Now Playing, Mini Player, Explore, Profile)
+- [x] Private downloads, stream samples, cancel/progress
+- [x] Persistence tests, URI safety, PlaybackErrorMapper
+- [x] Brand icon pipeline in CI
+- [x] versionName `0.1.0` / versionCode `1`
+- [x] RELEASE.md install / upgrade notes
 
-- [x] Offline library (Room), import, Media3 session, Now Playing, Mini Player, speed
-- [x] Brand icon, RTL, Back navigation, Library filters (دانلود شده‌ها)
-- [x] Sample catalog stream + private offline download (app sandbox)
-- [x] Download cancel, concurrent guard, space check, file validation, progress UI
-- [x] LocalUriAccess + PlaybackErrorMapper (Persian errors)
-- [x] Position persistence tests; repository dedupe (Issue #11 work)
+## Owner actions still open (not blocking further code)
 
-## Formal issues
+- [ ] Confirm TalkBack / system media controls on preferred devices (optional)
+- [ ] Choose open-source or proprietary **License**
+- [ ] Upload real release keystore via Secrets for non-debug release APKs
+- [ ] Enable GitHub **branch protection** on `main`
+- [ ] Host + API when ready (#14+)
 
-| Issue | Focus | Status |
-|-------|--------|--------|
-| #11 Persistence | Tests, URI safety, resume | Code done — device evidence / close with owner |
-| #12 Playback hardening | System controls, error paths | Mapper + checklist — device evidence open |
-| #14 API / hosting | Contract + provider | Waiting on product/host |
-| #15 Catalog download | Cancel/retry/space | Client hardening on main; API later |
-| #7 Accessibility | TalkBack / semantics | Open |
-| #13 Release | Keystore, license, versioning | Open |
+## After v0.1
 
-## Next recommended order
-
-1. Owner device pass for #12 checklist + #15 cancel/retry
-2. Issue #7 accessibility pass on core screens
-3. Issue #13 release readiness when ready to distribute
-4. #14 then real CDN for catalog
-
-See also: [HOSTING.md](HOSTING.md), [ISSUE-12-DEVICE-CHECKLIST.md](ISSUE-12-DEVICE-CHECKLIST.md)
+1. #14 API / hosting decision  
+2. #15 wire real catalog  
+3. #16 publishing workflow  
+4. Optional: Search, Onboarding, queue, encryption  
