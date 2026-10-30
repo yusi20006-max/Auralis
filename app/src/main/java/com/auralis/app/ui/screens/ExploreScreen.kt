@@ -50,6 +50,9 @@ private val categories = listOf("همه", "فلسفه", "علم", "تکنولو�
 fun ExploreScreen(
     onImportClick: () -> Unit,
     onStreamEpisode: (CatalogPodcast, CatalogEpisode) -> Unit = { _, _ -> },
+    onDownloadEpisode: (CatalogPodcast, CatalogEpisode) -> Unit = { _, _ -> },
+    downloadedRemoteIds: Set<String> = emptySet(),
+    downloadingRemoteIds: Set<String> = emptySet(),
     catalogRepository: CatalogRepository = remember { CatalogRepository() },
     modifier: Modifier = Modifier,
 ) {
@@ -63,10 +66,11 @@ fun ExploreScreen(
         CatalogPodcastDetailScreen(
             podcast = podcast,
             catalogRepository = catalogRepository,
+            downloadedRemoteIds = downloadedRemoteIds,
+            downloadingRemoteIds = downloadingRemoteIds,
             onBack = { selectedPodcast = null },
-            onEpisodeClick = { episode ->
-                onStreamEpisode(podcast, episode)
-            },
+            onPlayEpisode = { episode -> onStreamEpisode(podcast, episode) },
+            onDownloadEpisode = { episode -> onDownloadEpisode(podcast, episode) },
             modifier = modifier,
         )
         return
@@ -126,7 +130,7 @@ fun ExploreScreen(
             )
             Spacer(modifier = Modifier.height(AuralisSpacing.X2))
             Text(
-                text = "پادکست را باز کن و یک اپیزود را برای پخش آنلاین انتخاب کن.",
+                text = "پخش آنلاین یا دانلود خصوصی (مخفی از مدیریت فایل).",
                 color = AuralisColors.TextTertiary,
                 fontSize = AuralisTypeScale.Caption,
             )

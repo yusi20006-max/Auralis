@@ -41,8 +41,11 @@ import com.auralis.app.ui.theme.AuralisTypeScale
 fun CatalogPodcastDetailScreen(
     podcast: CatalogPodcast,
     catalogRepository: CatalogRepository,
+    downloadedRemoteIds: Set<String> = emptySet(),
+    downloadingRemoteIds: Set<String> = emptySet(),
     onBack: () -> Unit,
-    onEpisodeClick: (CatalogEpisode) -> Unit = {},
+    onPlayEpisode: (CatalogEpisode) -> Unit = {},
+    onDownloadEpisode: (CatalogEpisode) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val episodes by catalogRepository.observeEpisodes(podcast.id).collectAsState(initial = emptyList())
@@ -103,6 +106,12 @@ fun CatalogPodcastDetailScreen(
             color = AuralisColors.TextSecondary,
             fontSize = AuralisTypeScale.BodyMedium,
         )
+        Spacer(modifier = Modifier.height(AuralisSpacing.X2))
+        Text(
+            text = "فایل‌های دانلودشده فقط داخل Auralis ذخیره می‌شوند و در مدیریت فایل گوشی دیده نمی‌شوند.",
+            color = AuralisColors.TextTertiary,
+            fontSize = AuralisTypeScale.Caption,
+        )
         Spacer(modifier = Modifier.height(AuralisSpacing.X4))
         Text(
             text = "اپیزودها",
@@ -119,7 +128,10 @@ fun CatalogPodcastDetailScreen(
             items(episodes, key = { it.id }) { episode ->
                 EpisodeRow(
                     episode = episode,
-                    onClick = { onEpisodeClick(episode) },
+                    isDownloaded = downloadedRemoteIds.contains(episode.id),
+                    isDownloading = downloadingRemoteIds.contains(episode.id),
+                    onPlay = { onPlayEpisode(episode) },
+                    onDownload = { onDownloadEpisode(episode) },
                 )
                 Spacer(modifier = Modifier.height(AuralisSpacing.X2))
             }
@@ -130,12 +142,13 @@ fun CatalogPodcastDetailScreen(
 @Composable
 private fun EpisodeRow(
     episode: CatalogEpisode,
-    onClick: () -> Unit,
+    isDownloaded: Boolean,
+    isDownloading: Boolean,
+    onPlay: () -> Unit,
+    onDownload: () -> Unit,
 ) {
     val canStream = episode.audioUrl.isNotBlank()
     Surface(
-        onClick = onClick,
-        enabled = canStream,
         modifier = Modifier.fillMaxWidth(),
         color = AuralisColors.Surface,
         shape = RoundedCornerShape(AuralisCorners.Card),
@@ -159,13 +172,37 @@ private fun EpisodeRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = if (canStream) "▶ پخش آنلاین" else "استریم به‌زودی",
-                color = if (canStream) AuralisColors.PrimaryBlue else AuralisColors.TextTertiary,
-                fontSize = AuralisTypeScale.Overline,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Spacer(modifier = Modifier.height(AuralisSpacing.X2))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(
+                    onClick = onPlay,
+                    enabled = canStream,
+                ) {
+                    Text(
+                        text = if (isDownloaded) "▶ پخش آفلاین" else "▶ پخش آنلاین",
+                        color = if (canStream) AuralisColors.PrimaryBlue else AuralisColors.TextTertiary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                TextButton(
+                    onClick = onDownload,
+                    enabled = canStream && !isDownloaded && !isDownloading,
+                ) {
+                    Text(
+                        text = when {
+                            isDownloaded -> "✓ دانلود شده"
+                            isDownloading -> "در حال دانلود…"
+                            else -> "↓ دانلود خصوصی"
+                        },
+                        color = when {
+                            isDownloaded -> AuralisColors.Success
+                            isDownloading -> AuralisColors.AccentCyan
+                            else -> AuralisColors.TextSecondary
+                        },
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
         }
     }
 }
