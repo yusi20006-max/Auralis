@@ -275,6 +275,10 @@ class MainActivity : ComponentActivity() {
                 val currentEpisodeId by libraryRepository.currentEpisodeId.collectAsState()
                 val currentEpisode = episodes.find { it.id == currentEpisodeId }
                 val playbackSpeed by playbackPreferences.speed.collectAsState()
+                val downloadingRemoteIds by libraryRepository.downloadingRemoteIds.collectAsState()
+                val downloadedRemoteIds = episodes.mapNotNull { ep ->
+                    ep.remoteId?.takeIf { libraryRepository.isDownloaded(it) }
+                }.toSet()
 
                 val miniState = resolveMiniPlayerUiState(
                     hasMediaItem = hasMediaItem,
@@ -383,9 +387,9 @@ class MainActivity : ComponentActivity() {
                                 Column(Modifier.padding(padding).fillMaxSize()) {
                                     if (hasPlayerError) {
                                         AuralisErrorBanner(
-                                            message = "پخش فایل ممکن نشد. فایل جابه‌جا شده یا دسترسی از بین رفته است.",
-                                            actionLabel = "افزودن دوباره",
-                                            onAction = { openAudio.launch(arrayOf("audio/*")) },
+                                            message = "پخش یا دانلود ممکن نشد. اتصال یا فایل را بررسی کنید.",
+                                            actionLabel = "باشه",
+                                            onAction = { hasPlayerError = false },
                                             modifier = Modifier.padding(
                                                 horizontal = AuralisSpacing.X4,
                                                 vertical = AuralisSpacing.X2,
@@ -413,6 +417,8 @@ class MainActivity : ComponentActivity() {
                                             AuralisDestination.Explore -> {
                                                 ExploreScreen(
                                                     onImportClick = { openAudio.launch(arrayOf("audio/*")) },
+                                                    downloadedRemoteIds = downloadedRemoteIds,
+                                                    downloadingRemoteIds = downloadingRemoteIds,
                                                     onStreamEpisode = { podcast, catalogEpisode ->
                                                         if (catalogEpisode.audioUrl.isBlank()) return@ExploreScreen
                                                         val episode = libraryRepository.addOrGetStreamEpisode(
@@ -422,6 +428,18 @@ class MainActivity : ComponentActivity() {
                                                         libraryRepository.setCurrentEpisode(episode.id)
                                                         playEpisode(episode)
                                                         showNowPlaying = true
+                                                    },
+                                                    onDownloadEpisode = { podcast, catalogEpisode ->
+                                                        if (catalogEpisode.audioUrl.isBlank()) return@ExploreScreen
+                                                        lifecycleScope.launch {
+                                                            val episode = libraryRepository.downloadEpisodeOffline(
+                                                                catalogEpisode = catalogEpisode,
+                                                                podcast = podcast,
+                                                            )
+                                                            if (episode == null) {
+                                                                hasPlayerError = true
+                                                            }
+                                                        }
                                                     },
                                                 )
                                             }
