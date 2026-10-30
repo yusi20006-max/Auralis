@@ -69,10 +69,15 @@ fun LibraryScreen(
     val localOnly = remember(episodes) {
         episodes.filter { it.remoteId == null && it.localUri != null }
     }
-    val visible = when (filter) {
-        LibraryFilter.All -> episodes
-        LibraryFilter.Downloaded -> downloaded
-        LibraryFilter.LocalFiles -> localOnly
+    val restWhenAll = remember(episodes, downloaded) {
+        val dlIds = downloaded.map { it.id }.toSet()
+        episodes.filter { it.id !in dlIds }
+    }
+
+    val isEmpty = when (filter) {
+        LibraryFilter.All -> episodes.isEmpty()
+        LibraryFilter.Downloaded -> downloaded.isEmpty()
+        LibraryFilter.LocalFiles -> localOnly.isEmpty()
     }
 
     Column(
@@ -130,7 +135,7 @@ fun LibraryScreen(
         }
         Spacer(modifier = Modifier.height(AuralisSpacing.X3))
 
-        if (visible.isEmpty()) {
+        if (isEmpty) {
             val (title, subtitle, action) = when (filter) {
                 LibraryFilter.Downloaded -> Triple(
                     "هنوز دانلود خصوصی ندارید",
@@ -160,47 +165,70 @@ fun LibraryScreen(
                 verticalArrangement = Arrangement.spacedBy(AuralisSpacing.X3),
                 contentPadding = PaddingValues(bottom = 100.dp),
             ) {
-                if (filter == LibraryFilter.All && downloaded.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = "دانلود شده‌ها",
-                            color = AuralisColors.TextSecondary,
-                            fontSize = AuralisTypeScale.Caption,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(bottom = AuralisSpacing.X2),
-                        )
+                when (filter) {
+                    LibraryFilter.Downloaded -> {
+                        items(downloaded, key = { it.id }) { episode ->
+                            EpisodeListItem(
+                                episode = episode,
+                                badge = "آفلاین",
+                                onClick = { onEpisodeClick(episode) },
+                                onLongClick = { pendingDelete = episode },
+                            )
+                        }
                     }
-                    items(downloaded, key = { "dl-${it.id}" }) { episode ->
-                        EpisodeListItem(
-                            episode = episode,
-                            badge = "آفلاین",
-                            onClick = { onEpisodeClick(episode) },
-                            onLongClick = { pendingDelete = episode },
-                        )
+                    LibraryFilter.LocalFiles -> {
+                        items(localOnly, key = { it.id }) { episode ->
+                            EpisodeListItem(
+                                episode = episode,
+                                badge = null,
+                                onClick = { onEpisodeClick(episode) },
+                                onLongClick = { pendingDelete = episode },
+                            )
+                        }
                     }
-                    item {
-                        Spacer(modifier = Modifier.height(AuralisSpacing.X2))
-                        Text(
-                            text = "همه موارد",
-                            color = AuralisColors.TextSecondary,
-                            fontSize = AuralisTypeScale.Caption,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(vertical = AuralisSpacing.X2),
-                        )
+                    LibraryFilter.All -> {
+                        if (downloaded.isNotEmpty()) {
+                            item {
+                                Text(
+                                    text = "دانلود شده‌ها",
+                                    color = AuralisColors.TextSecondary,
+                                    fontSize = AuralisTypeScale.Caption,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                            items(downloaded, key = { "dl-${it.id}" }) { episode ->
+                                EpisodeListItem(
+                                    episode = episode,
+                                    badge = "آفلاین",
+                                    onClick = { onEpisodeClick(episode) },
+                                    onLongClick = { pendingDelete = episode },
+                                )
+                            }
+                        }
+                        if (restWhenAll.isNotEmpty()) {
+                            item {
+                                Text(
+                                    text = if (downloaded.isNotEmpty()) "سایر" else "همه موارد",
+                                    color = AuralisColors.TextSecondary,
+                                    fontSize = AuralisTypeScale.Caption,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(top = AuralisSpacing.X2),
+                                )
+                            }
+                            items(restWhenAll, key = { it.id }) { episode ->
+                                val badge = when {
+                                    episode.remoteId != null -> "استریم"
+                                    else -> null
+                                }
+                                EpisodeListItem(
+                                    episode = episode,
+                                    badge = badge,
+                                    onClick = { onEpisodeClick(episode) },
+                                    onLongClick = { pendingDelete = episode },
+                                )
+                            }
+                        }
                     }
-                }
-                items(visible, key = { it.id }) { episode ->
-                    val badge = when {
-                        episode.remoteId != null && episode.localUri != null -> "آفلاین"
-                        episode.remoteId != null -> "استریم"
-                        else -> null
-                    }
-                    EpisodeListItem(
-                        episode = episode,
-                        badge = badge,
-                        onClick = { onEpisodeClick(episode) },
-                        onLongClick = { pendingDelete = episode },
-                    )
                 }
             }
         }
