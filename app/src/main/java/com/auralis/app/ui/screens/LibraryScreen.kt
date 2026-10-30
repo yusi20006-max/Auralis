@@ -36,6 +36,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -106,6 +109,7 @@ fun LibraryScreen(
                     contentColor = AuralisColors.TextPrimary,
                 ),
                 shape = RoundedCornerShape(AuralisCorners.Button),
+                modifier = Modifier.semantics { contentDescription = "افزودن فایل صوتی از حافظه" },
             ) {
                 Text("افزودن فایل", fontSize = AuralisTypeScale.Caption)
             }
@@ -114,7 +118,8 @@ fun LibraryScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
+                .horizontalScroll(rememberScrollState())
+                .semantics { contentDescription = "فیلتر کتابخانه" },
             horizontalArrangement = Arrangement.spacedBy(AuralisSpacing.X2),
         ) {
             LibraryFilterChip(
@@ -278,6 +283,10 @@ private fun LibraryFilterChip(
             labelColor = AuralisColors.TextSecondary,
         ),
         shape = RoundedCornerShape(AuralisCorners.Button),
+        modifier = Modifier.semantics {
+            contentDescription = label
+            stateDescription = if (selected) "انتخاب‌شده" else "انتخاب‌نشده"
+        },
     )
 }
 
@@ -293,6 +302,19 @@ private fun EpisodeListItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(AuralisCorners.Card))
+            .semantics {
+                contentDescription = buildString {
+                    append(episode.title)
+                    append(". ")
+                    append(episode.podcastName)
+                    if (badge != null) {
+                        append(". ")
+                        append(badge)
+                    }
+                    append(". برای حذف، لمس طولانی کنید.")
+                }
+                if (badge != null) stateDescription = badge
+            }
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
