@@ -10,16 +10,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -29,6 +26,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.auralis.app.data.Episode
 import com.auralis.app.data.LibraryRepository
+import com.auralis.app.data.LocalUriAccess
 import com.auralis.app.data.PlaybackPreferences
 import com.auralis.app.ui.components.AuralisErrorBanner
 import com.auralis.app.ui.components.AuralisMiniPlayer
@@ -70,6 +68,7 @@ class MainActivity : ComponentActivity() {
     private var playWhenReady by mutableStateOf(false)
     private var hasMediaItem by mutableStateOf(false)
     private var hasPlayerError by mutableStateOf(false)
+    private var playerErrorMessage by mutableStateOf<String?>(null)
     private var sessionTitle by mutableStateOf<String?>(null)
     private var attachedFileName by mutableStateOf<String?>(null)
     private var positionMs by mutableStateOf(0L)
@@ -111,9 +110,11 @@ class MainActivity : ComponentActivity() {
 
         resolveDisplayNameOffMain(uri) { name ->
             val title = name ?: "فایل صوتی"
-            val episode = libraryRepository.addLocalEpisode(uri = uri, title = title)
-            libraryRepository.setCurrentEpisode(episode.id)
-            playEpisode(episode)
+            lifecycleScope.launch {
+                val episode = libraryRepository.addLocalEpisode(uri = uri, title = title)
+                libraryRepository.setCurrentEpisode(episode.id)
+                playEpisode(episode)
+            }
         }
     }
 
@@ -123,11 +124,19 @@ class MainActivity : ComponentActivity() {
 
     private fun playEpisode(episode: Episode) {
         val player = controller ?: return
-        val uri = episode.localUri
-            ?: episode.audioUrl?.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
-            ?: return
+        val uri = LocalUriAccess.resolvePlayableUri(this, episode)
+        if (uri == null) {
+            hasPlayerError = true
+            playerErrorMessage = if (episode.localUri != null) {
+                LocalUriAccess.unreadableLocalMessage()
+            } else {
+                LocalUriAccess.noSourceMessage()
+            }
+            return
+        }
         try {
             hasPlayerError = false
+            playerErrorMessage = null
             player.pause()
             player.setMediaItem(
                 MediaItem.Builder()
@@ -150,8 +159,12 @@ class MainActivity : ComponentActivity() {
             player.playWhenReady = true
             player.play()
             libraryRepository.setCurrentEpisode(episode.id)
+        } catch (_: SecurityException) {
+            hasPlayerError = true
+            playerErrorMessage = LocalUriAccess.unreadableLocalMessage()
         } catch (_: RuntimeException) {
             hasPlayerError = true
+            playerErrorMessage = "پخش این فایل ممکن نشد."
         }
     }
 
@@ -165,6 +178,7 @@ class MainActivity : ComponentActivity() {
                 player.seekToDefaultPosition()
                 player.play()
                 hasPlayerError = false
+                playerErrorMessage = null
             }
             player.isPlaying || (player.playWhenReady && player.playbackState == Player.STATE_BUFFERING) -> {
                 player.pause()
@@ -173,6 +187,7 @@ class MainActivity : ComponentActivity() {
                 if (player.playbackState == Player.STATE_IDLE) player.prepare()
                 player.play()
                 hasPlayerError = false
+                playerErrorMessage = null
             }
         }
     }
@@ -244,6 +259,13 @@ class MainActivity : ComponentActivity() {
                         override fun onPlayerError(error: PlaybackException) {
                             isPlaying = false
                             hasPlayerError = true
+                            playerErrorMessage = when (error.errorCode) {
+                                PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
+                                PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
+                                PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED,
+                                -> LocalUriAccess.unreadableLocalMessage()
+                                else -> "پخش متوقف شد: ${error.message ?: "خطای ناشناخته"}"
+                            }
                         }
                     })
 
@@ -265,6 +287,7 @@ class MainActivity : ComponentActivity() {
                 }
             } catch (_: ExecutionException) {
                 hasPlayerError = true
+                playerErrorMessage = "اتصال به سرویس پخش برقرار نشد."
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
             }
@@ -396,9 +419,13 @@ class MainActivity : ComponentActivity() {
                                 Column(Modifier.padding(padding).fillMaxSize()) {
                                     if (hasPlayerError) {
                                         AuralisErrorBanner(
-                                            message = "پخش یا دانلود ممکن نشد. اتصال یا فایل را بررسی کنید.",
+                                            message = playerErrorMessage
+                                                ?: "پخش یا دانلود ممکن نشد. اتصال یا فایل را بررسی کنید.",
                                             actionLabel = "باشه",
-                                            onAction = { hasPlayerError = false },
+                                            onAction = {
+                                                hasPlayerError = false
+                                                playerErrorMessage = null
+                                            },
                                             modifier = Modifier.padding(
                                                 horizontal = AuralisSpacing.X4,
                                                 vertical = AuralisSpacing.X2,
@@ -448,6 +475,7 @@ class MainActivity : ComponentActivity() {
                                                             )
                                                             if (episode == null) {
                                                                 hasPlayerError = true
+                                                                playerErrorMessage = "دانلود انجام نشد. اتصال را بررسی کنید."
                                                             }
                                                         }
                                                     },
