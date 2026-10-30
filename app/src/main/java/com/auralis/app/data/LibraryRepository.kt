@@ -2,6 +2,7 @@ package com.auralis.app.data
 
 import android.content.Context
 import android.net.Uri
+import com.auralis.app.data.catalog.CatalogConfig
 import com.auralis.app.data.catalog.CatalogEpisode
 import com.auralis.app.data.catalog.CatalogPodcast
 import com.auralis.app.data.db.AuralisDatabase
@@ -20,9 +21,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
-/**
- * Library repository backed by Room + private offline downloads.
- */
 class LibraryRepository(context: Context) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -36,9 +34,12 @@ class LibraryRepository(context: Context) {
     private val _currentEpisodeId = MutableStateFlow<String?>(null)
     val currentEpisodeId: StateFlow<String?> = _currentEpisodeId.asStateFlow()
 
-    /** remoteId → true while download is in progress */
     private val _downloadingRemoteIds = MutableStateFlow<Set<String>>(emptySet())
     val downloadingRemoteIds: StateFlow<Set<String>> = _downloadingRemoteIds.asStateFlow()
+
+    /** remoteId → 0f..1f while downloading */
+    private val _downloadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
+    val downloadProgress: StateFlow<Map<String, Float>> = _downloadProgress.asStateFlow()
 
     fun addLocalEpisode(
         uri: Uri,
@@ -68,17 +69,15 @@ class LibraryRepository(context: Context) {
         catalogEpisode: CatalogEpisode,
         podcast: CatalogPodcast?,
     ): Episode {
+        val resolvedUrl = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
         val existing = episodes.value.find { it.remoteId == catalogEpisode.id }
         if (existing != null) {
-            // Prefer private file if already downloaded
             val privateUri = downloadStore.uriForRemoteId(catalogEpisode.id)
             if (privateUri != null && existing.localUri == null) {
-                scope.launch {
-                    dao.updateLocalUri(existing.id, privateUri.toString())
-                }
-                return existing.copy(localUri = privateUri)
+                scope.launch { dao.updateLocalUri(existing.id, privateUri.toString()) }
+                return existing.copy(localUri = privateUri, audioUrl = resolvedUrl)
             }
-            return existing
+            return existing.copy(audioUrl = resolvedUrl)
         }
 
         val privateUri = downloadStore.uriForRemoteId(catalogEpisode.id)
@@ -89,42 +88,39 @@ class LibraryRepository(context: Context) {
             description = catalogEpisode.description,
             durationMs = catalogEpisode.durationMs,
             remoteId = catalogEpisode.id,
-            audioUrl = catalogEpisode.audioUrl,
+            audioUrl = resolvedUrl,
             localUri = privateUri,
             isAiGenerated = catalogEpisode.isAiGenerated,
         )
-        scope.launch {
-            dao.upsert(EpisodeEntity.from(episode))
-        }
+        scope.launch { dao.upsert(EpisodeEntity.from(episode)) }
         return episode
     }
 
     fun isDownloaded(remoteId: String): Boolean = downloadStore.hasLocalCopy(remoteId)
 
-    /**
-     * Download catalog audio into app-private storage (not visible to file managers).
-     * @return updated [Episode] with localUri set, or null on failure.
-     */
     suspend fun downloadEpisodeOffline(
         catalogEpisode: CatalogEpisode,
         podcast: CatalogPodcast?,
     ): Episode? = withContext(Dispatchers.IO) {
         val remoteId = catalogEpisode.id
-        val url = catalogEpisode.audioUrl
+        val url = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
         if (url.isBlank()) return@withContext null
 
         _downloadingRemoteIds.value = _downloadingRemoteIds.value + remoteId
+        _downloadProgress.value = _downloadProgress.value + (remoteId to 0f)
         try {
             val fileUri = if (downloadStore.hasLocalCopy(remoteId)) {
                 downloadStore.uriForRemoteId(remoteId)!!
             } else {
-                downloadStore.download(remoteId, url)
+                downloadStore.download(remoteId, url) { p ->
+                    _downloadProgress.value = _downloadProgress.value + (remoteId to p)
+                }
             }
 
             val existing = dao.getByRemoteId(remoteId)?.toEpisode()
             if (existing != null) {
                 dao.updateLocalUri(existing.id, fileUri.toString())
-                return@withContext existing.copy(localUri = fileUri)
+                return@withContext existing.copy(localUri = fileUri, audioUrl = url)
             }
 
             val episode = Episode(
@@ -144,6 +140,7 @@ class LibraryRepository(context: Context) {
             null
         } finally {
             _downloadingRemoteIds.value = _downloadingRemoteIds.value - remoteId
+            _downloadProgress.value = _downloadProgress.value - remoteId
         }
     }
 

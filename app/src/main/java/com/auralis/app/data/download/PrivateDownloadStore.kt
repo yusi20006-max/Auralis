@@ -2,6 +2,7 @@ package com.auralis.app.data.download
 
 import android.content.Context
 import android.net.Uri
+import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -9,13 +10,10 @@ import java.net.URL
 import java.security.MessageDigest
 
 /**
- * Stores audio only inside the app private sandbox ([Context.getFilesDir]).
- * Files are NOT placed in public Downloads/Music and are not indexed by MediaStore,
- * so typical file managers cannot browse or search them.
- *
- * Filenames are opaque hashes (no original title) for extra obscurity.
+ * App-private audio storage. Not in public Downloads; not MediaStore-indexed.
+ * Opaque hashed filenames. Playback URIs go through FileProvider (content://).
  */
-class PrivateDownloadStore(context: Context) {
+class PrivateDownloadStore(private val context: Context) {
 
     private val root: File = File(context.filesDir, DIR_NAME).also { it.mkdirs() }
 
@@ -29,7 +27,8 @@ class PrivateDownloadStore(context: Context) {
 
     fun uriForRemoteId(remoteId: String): Uri? {
         val f = fileForRemoteId(remoteId)
-        return if (f.isFile && f.length() > 0L) Uri.fromFile(f) else null
+        if (!f.isFile || f.length() <= 0L) return null
+        return contentUri(f)
     }
 
     fun delete(remoteId: String) {
@@ -37,9 +36,13 @@ class PrivateDownloadStore(context: Context) {
     }
 
     /**
-     * Download [url] into private storage. Returns file:// Uri on success.
+     * @param onProgress fraction 0f..1f (best-effort; unknown length → indeterminate jumps)
      */
-    fun download(remoteId: String, url: String): Uri {
+    fun download(
+        remoteId: String,
+        url: String,
+        onProgress: ((Float) -> Unit)? = null,
+    ): Uri {
         require(url.startsWith("https://") || url.startsWith("http://")) {
             "Only http(s) URLs are supported"
         }
@@ -58,6 +61,8 @@ class PrivateDownloadStore(context: Context) {
             if (code !in 200..299) {
                 throw IllegalStateException("HTTP $code")
             }
+            val total = connection.contentLengthLong.coerceAtLeast(-1L)
+            var written = 0L
             connection.inputStream.use { input ->
                 FileOutputStream(partial).use { output ->
                     val buffer = ByteArray(16 * 1024)
@@ -65,22 +70,32 @@ class PrivateDownloadStore(context: Context) {
                         val read = input.read(buffer)
                         if (read <= 0) break
                         output.write(buffer, 0, read)
+                        written += read
+                        if (total > 0 && onProgress != null) {
+                            onProgress((written.toFloat() / total.toFloat()).coerceIn(0f, 1f))
+                        }
                     }
                     output.flush()
                 }
             }
+            onProgress?.invoke(1f)
             if (target.exists()) target.delete()
             if (!partial.renameTo(target)) {
                 partial.copyTo(target, overwrite = true)
                 partial.delete()
             }
-            return Uri.fromFile(target)
+            return contentUri(target)
         } finally {
             connection.disconnect()
             if (partial.exists() && !target.exists()) {
                 partial.delete()
             }
         }
+    }
+
+    private fun contentUri(file: File): Uri {
+        val authority = context.packageName + ".fileprovider"
+        return FileProvider.getUriForFile(context, authority, file)
     }
 
     companion object {
@@ -90,7 +105,6 @@ class PrivateDownloadStore(context: Context) {
             val digest = MessageDigest.getInstance("SHA-256")
                 .digest(remoteId.toByteArray(Charsets.UTF_8))
             val hex = digest.joinToString("") { b -> "%02x".format(b) }.take(32)
-            // No media extension → less likely to be auto-scanned if path leaked.
             return "a_$hex"
         }
     }
