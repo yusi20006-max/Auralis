@@ -6,6 +6,7 @@ import com.auralis.app.data.catalog.CatalogConfig
 import com.auralis.app.data.catalog.CatalogEpisode
 import com.auralis.app.data.catalog.CatalogPodcast
 import com.auralis.app.data.db.AuralisDatabase
+import com.auralis.app.data.db.EpisodeDao
 import com.auralis.app.data.db.EpisodeEntity
 import com.auralis.app.data.download.PrivateDownloadStore
 import kotlinx.coroutines.CoroutineScope
@@ -21,11 +22,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
-class LibraryRepository(context: Context) {
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val dao = AuralisDatabase.get(context).episodeDao()
-    private val downloadStore = PrivateDownloadStore(context)
+class LibraryRepository internal constructor(
+    private val dao: EpisodeDao,
+    private val downloadStore: PrivateDownloadStore,
+    private val scope: CoroutineScope,
+) {
+    constructor(context: Context) : this(
+        AuralisDatabase.get(context).episodeDao(),
+        PrivateDownloadStore(context),
+        CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    )
 
     val episodes: StateFlow<List<Episode>> = dao.observeAll()
         .map { list -> list.map { it.toEpisode() } }
@@ -41,7 +47,7 @@ class LibraryRepository(context: Context) {
     private val _downloadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
     val downloadProgress: StateFlow<Map<String, Float>> = _downloadProgress.asStateFlow()
 
-    fun addLocalEpisode(
+    suspend fun addLocalEpisode(
         uri: Uri,
         title: String,
         durationMs: Long = 0L,
@@ -56,13 +62,7 @@ class LibraryRepository(context: Context) {
             localUri = uri,
             isAiGenerated = true,
         )
-        scope.launch {
-            val existing = episodes.value.find { it.localUri == uri }
-            if (existing == null) {
-                dao.upsert(EpisodeEntity.from(episode))
-            }
-        }
-        return episode
+        return dao.getOrInsertLocalEpisode(EpisodeEntity.from(episode)).toEpisode()
     }
 
     fun addOrGetStreamEpisode(

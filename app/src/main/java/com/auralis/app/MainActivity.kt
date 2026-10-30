@@ -110,9 +110,11 @@ class MainActivity : ComponentActivity() {
 
         resolveDisplayNameOffMain(uri) { name ->
             val title = name ?: "فایل صوتی"
-            val episode = libraryRepository.addLocalEpisode(uri = uri, title = title)
-            libraryRepository.setCurrentEpisode(episode.id)
-            playEpisode(episode)
+            lifecycleScope.launch {
+                val episode = libraryRepository.addLocalEpisode(uri = uri, title = title)
+                libraryRepository.setCurrentEpisode(episode.id)
+                playEpisode(episode)
+            }
         }
     }
 
