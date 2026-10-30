@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,6 +44,7 @@ fun CatalogPodcastDetailScreen(
     catalogRepository: CatalogRepository,
     downloadedRemoteIds: Set<String> = emptySet(),
     downloadingRemoteIds: Set<String> = emptySet(),
+    downloadProgress: Map<String, Float> = emptyMap(),
     onBack: () -> Unit,
     onPlayEpisode: (CatalogEpisode) -> Unit = {},
     onDownloadEpisode: (CatalogEpisode) -> Unit = {},
@@ -108,7 +110,7 @@ fun CatalogPodcastDetailScreen(
         )
         Spacer(modifier = Modifier.height(AuralisSpacing.X2))
         Text(
-            text = "فایل‌های دانلودشده فقط داخل Auralis ذخیره می‌شوند و در مدیریت فایل گوشی دیده نمی‌شوند.",
+            text = "دانلود خصوصی: فقط داخل Auralis — در مدیریت فایل گوشی دیده نمی‌شود.",
             color = AuralisColors.TextTertiary,
             fontSize = AuralisTypeScale.Caption,
         )
@@ -130,6 +132,7 @@ fun CatalogPodcastDetailScreen(
                     episode = episode,
                     isDownloaded = downloadedRemoteIds.contains(episode.id),
                     isDownloading = downloadingRemoteIds.contains(episode.id),
+                    progress = downloadProgress[episode.id],
                     onPlay = { onPlayEpisode(episode) },
                     onDownload = { onDownloadEpisode(episode) },
                 )
@@ -144,6 +147,7 @@ private fun EpisodeRow(
     episode: CatalogEpisode,
     isDownloaded: Boolean,
     isDownloading: Boolean,
+    progress: Float?,
     onPlay: () -> Unit,
     onDownload: () -> Unit,
 ) {
@@ -172,12 +176,37 @@ private fun EpisodeRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            if (isDownloading) {
+                Spacer(modifier = Modifier.height(AuralisSpacing.X2))
+                val p = progress?.coerceIn(0f, 1f)
+                if (p != null && p > 0f) {
+                    LinearProgressIndicator(
+                        progress = { p },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = AuralisColors.PrimaryBlue,
+                        trackColor = AuralisColors.SurfaceElevated,
+                    )
+                    Text(
+                        text = "دانلود ${(p * 100).toInt()}٪",
+                        color = AuralisColors.AccentCyan,
+                        fontSize = AuralisTypeScale.Caption,
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = AuralisColors.PrimaryBlue,
+                        trackColor = AuralisColors.SurfaceElevated,
+                    )
+                    Text(
+                        text = "در حال دانلود…",
+                        color = AuralisColors.AccentCyan,
+                        fontSize = AuralisTypeScale.Caption,
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(AuralisSpacing.X2))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(
-                    onClick = onPlay,
-                    enabled = canStream,
-                ) {
+                TextButton(onClick = onPlay, enabled = canStream) {
                     Text(
                         text = if (isDownloaded) "▶ پخش آفلاین" else "▶ پخش آنلاین",
                         color = if (canStream) AuralisColors.PrimaryBlue else AuralisColors.TextTertiary,
@@ -191,12 +220,11 @@ private fun EpisodeRow(
                     Text(
                         text = when {
                             isDownloaded -> "✓ دانلود شده"
-                            isDownloading -> "در حال دانلود…"
+                            isDownloading -> "…"
                             else -> "↓ دانلود خصوصی"
                         },
                         color = when {
                             isDownloaded -> AuralisColors.Success
-                            isDownloading -> AuralisColors.AccentCyan
                             else -> AuralisColors.TextSecondary
                         },
                         fontWeight = FontWeight.SemiBold,
