@@ -53,6 +53,7 @@ fun ExploreScreen(
     onDownloadEpisode: (CatalogPodcast, CatalogEpisode) -> Unit = { _, _ -> },
     downloadedRemoteIds: Set<String> = emptySet(),
     downloadingRemoteIds: Set<String> = emptySet(),
+    downloadProgress: Map<String, Float> = emptyMap(),
     catalogRepository: CatalogRepository = remember { CatalogRepository() },
     modifier: Modifier = Modifier,
 ) {
@@ -68,6 +69,7 @@ fun ExploreScreen(
             catalogRepository = catalogRepository,
             downloadedRemoteIds = downloadedRemoteIds,
             downloadingRemoteIds = downloadingRemoteIds,
+            downloadProgress = downloadProgress,
             onBack = { selectedPodcast = null },
             onPlayEpisode = { episode -> onStreamEpisode(podcast, episode) },
             onDownloadEpisode = { episode -> onDownloadEpisode(podcast, episode) },
