@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -110,11 +111,9 @@ class MainActivity : ComponentActivity() {
 
         resolveDisplayNameOffMain(uri) { name ->
             val title = name ?: "فایل صوتی"
-            lifecycleScope.launch {
-                val episode = libraryRepository.addLocalEpisode(uri = uri, title = title)
-                libraryRepository.setCurrentEpisode(episode.id)
-                playEpisode(episode)
-            }
+            val episode = libraryRepository.addLocalEpisode(uri = uri, title = title)
+            libraryRepository.setCurrentEpisode(episode.id)
+            playEpisode(episode)
         }
     }
 
@@ -282,6 +281,13 @@ class MainActivity : ComponentActivity() {
                 val downloadedRemoteIds = episodes.mapNotNull { ep ->
                     ep.remoteId?.takeIf { libraryRepository.isDownloaded(it) }
                 }.toSet()
+
+                BackHandler(enabled = showNowPlaying || showSettings) {
+                    when {
+                        showNowPlaying -> showNowPlaying = false
+                        showSettings -> showSettings = false
+                    }
+                }
 
                 val miniState = resolveMiniPlayerUiState(
                     hasMediaItem = hasMediaItem,
