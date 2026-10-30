@@ -11,6 +11,14 @@ import androidx.media3.session.MediaSessionService
 
 /**
  * Background playback with notification + lock-screen controls (Media3 session).
+ *
+ * Issue #12 audit (code-side):
+ * - Audio focus: handleAudioFocus = true
+ * - Headset unplug / BT disconnect: setHandleAudioBecomingNoisy(true) → pause
+ * - Screen-off: WAKE_MODE_LOCAL while playing
+ * - Notification / lock screen: MediaSession + sessionActivity → MainActivity
+ * - Playing UI must mirror Player.isPlaying (MainActivity / MiniPlayer), never optimistic click
+ * - Task removed from recents: keep service if playWhenReady so audio continues
  */
 class PlaybackService : MediaSessionService() {
 
@@ -47,6 +55,22 @@ class PlaybackService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
         mediaSession
+
+    /**
+     * If the user swipes the app away while audio should still play, keep the service.
+     * Otherwise stop so we do not leak a silent session.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val player = mediaSession?.player
+        val keepAlive = player != null &&
+            (player.isPlaying || player.playWhenReady) &&
+            player.playbackState != Player.STATE_ENDED &&
+            player.playbackState != Player.STATE_IDLE
+        if (!keepAlive) {
+            stopSelf()
+        }
+        // When keepAlive: do not call stopSelf(); MediaSessionService stays for notification controls.
+    }
 
     override fun onDestroy() {
         mediaSession?.run {
