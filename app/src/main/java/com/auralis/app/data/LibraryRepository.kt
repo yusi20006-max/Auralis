@@ -8,6 +8,8 @@ import com.auralis.app.data.catalog.CatalogPodcast
 import com.auralis.app.data.db.AuralisDatabase
 import com.auralis.app.data.db.EpisodeDao
 import com.auralis.app.data.db.EpisodeEntity
+import com.auralis.app.data.download.DownloadCancelledException
+import com.auralis.app.data.download.InsufficientSpaceException
 import com.auralis.app.data.download.PrivateDownloadStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,8 +21,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 class LibraryRepository internal constructor(
     private val dao: EpisodeDao,
@@ -43,9 +48,13 @@ class LibraryRepository internal constructor(
     private val _downloadingRemoteIds = MutableStateFlow<Set<String>>(emptySet())
     val downloadingRemoteIds: StateFlow<Set<String>> = _downloadingRemoteIds.asStateFlow()
 
-    /** remoteId → 0f..1f while downloading */
     private val _downloadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
     val downloadProgress: StateFlow<Map<String, Float>> = _downloadProgress.asStateFlow()
+
+    private val _lastDownloadError = MutableStateFlow<String?>(null)
+    val lastDownloadError: StateFlow<String?> = _lastDownloadError.asStateFlow()
+
+    private val downloadMutexes = ConcurrentHashMap<String, Mutex>()
 
     suspend fun addLocalEpisode(
         uri: Uri,
@@ -53,6 +62,9 @@ class LibraryRepository internal constructor(
         durationMs: Long = 0L,
         artworkUri: Uri? = null,
     ): Episode {
+        val existing = dao.getByLocalUri(uri.toString())
+        if (existing != null) return existing.toEpisode()
+
         val episode = Episode(
             id = UUID.randomUUID().toString(),
             title = title.ifBlank { "اپیزود بدون عنوان" },
@@ -62,7 +74,8 @@ class LibraryRepository internal constructor(
             localUri = uri,
             isAiGenerated = true,
         )
-        return dao.getOrInsertLocalEpisode(EpisodeEntity.from(episode)).toEpisode()
+        dao.upsert(EpisodeEntity.from(episode))
+        return episode
     }
 
     fun addOrGetStreamEpisode(
@@ -98,50 +111,88 @@ class LibraryRepository internal constructor(
 
     fun isDownloaded(remoteId: String): Boolean = downloadStore.hasLocalCopy(remoteId)
 
+    fun cancelDownload(remoteId: String) {
+        downloadStore.cancel(remoteId)
+    }
+
+    fun clearDownloadError() {
+        _lastDownloadError.value = null
+    }
+
+    /**
+     * Download into private storage. Safe to call again (retry).
+     * Concurrent calls for the same remoteId are serialized / ignored if already running.
+     */
     suspend fun downloadEpisodeOffline(
         catalogEpisode: CatalogEpisode,
         podcast: CatalogPodcast?,
     ): Episode? = withContext(Dispatchers.IO) {
         val remoteId = catalogEpisode.id
         val url = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
-        if (url.isBlank()) return@withContext null
+        if (url.isBlank()) {
+            _lastDownloadError.value = "آدرس فایل خالی است."
+            return@withContext null
+        }
 
-        _downloadingRemoteIds.value = _downloadingRemoteIds.value + remoteId
-        _downloadProgress.value = _downloadProgress.value + (remoteId to 0f)
-        try {
-            val fileUri = if (downloadStore.hasLocalCopy(remoteId)) {
-                downloadStore.uriForRemoteId(remoteId)!!
-            } else {
-                downloadStore.download(remoteId, url) { p ->
+        if (remoteId in _downloadingRemoteIds.value) {
+            return@withContext null
+        }
+
+        val mutex = downloadMutexes.getOrPut(remoteId) { Mutex() }
+        mutex.withLock {
+            if (downloadStore.hasLocalCopy(remoteId)) {
+                val uri = downloadStore.uriForRemoteId(remoteId)!!
+                return@withLock upsertDownloaded(catalogEpisode, podcast, url, uri)
+            }
+
+            _lastDownloadError.value = null
+            _downloadingRemoteIds.value = _downloadingRemoteIds.value + remoteId
+            _downloadProgress.value = _downloadProgress.value + (remoteId to 0f)
+            try {
+                val fileUri = downloadStore.download(remoteId, url) { p ->
                     _downloadProgress.value = _downloadProgress.value + (remoteId to p)
                 }
+                upsertDownloaded(catalogEpisode, podcast, url, fileUri)
+            } catch (_: DownloadCancelledException) {
+                _lastDownloadError.value = null
+                null
+            } catch (e: InsufficientSpaceException) {
+                _lastDownloadError.value = "فضای ذخیره‌سازی کافی نیست."
+                null
+            } catch (_: Exception) {
+                _lastDownloadError.value = "دانلود انجام نشد. اتصال را بررسی کنید و دوباره تلاش کنید."
+                null
+            } finally {
+                _downloadingRemoteIds.value = _downloadingRemoteIds.value - remoteId
+                _downloadProgress.value = _downloadProgress.value - remoteId
             }
-
-            val existing = dao.getByRemoteId(remoteId)?.toEpisode()
-            if (existing != null) {
-                dao.updateLocalUri(existing.id, fileUri.toString())
-                return@withContext existing.copy(localUri = fileUri, audioUrl = url)
-            }
-
-            val episode = Episode(
-                id = UUID.randomUUID().toString(),
-                title = catalogEpisode.title,
-                podcastName = podcast?.title ?: "Auralis",
-                description = catalogEpisode.description,
-                durationMs = catalogEpisode.durationMs,
-                remoteId = remoteId,
-                audioUrl = url,
-                localUri = fileUri,
-                isAiGenerated = catalogEpisode.isAiGenerated,
-            )
-            dao.upsert(EpisodeEntity.from(episode))
-            episode
-        } catch (_: Exception) {
-            null
-        } finally {
-            _downloadingRemoteIds.value = _downloadingRemoteIds.value - remoteId
-            _downloadProgress.value = _downloadProgress.value - remoteId
         }
+    }
+
+    private suspend fun upsertDownloaded(
+        catalogEpisode: CatalogEpisode,
+        podcast: CatalogPodcast?,
+        url: String,
+        fileUri: Uri,
+    ): Episode {
+        val existing = dao.getByRemoteId(catalogEpisode.id)?.toEpisode()
+        if (existing != null) {
+            dao.updateLocalUri(existing.id, fileUri.toString())
+            return existing.copy(localUri = fileUri, audioUrl = url)
+        }
+        val episode = Episode(
+            id = UUID.randomUUID().toString(),
+            title = catalogEpisode.title,
+            podcastName = podcast?.title ?: "Auralis",
+            description = catalogEpisode.description,
+            durationMs = catalogEpisode.durationMs,
+            remoteId = catalogEpisode.id,
+            audioUrl = url,
+            localUri = fileUri,
+            isAiGenerated = catalogEpisode.isAiGenerated,
+        )
+        dao.upsert(EpisodeEntity.from(episode))
+        return episode
     }
 
     fun updatePosition(episodeId: String, positionMs: Long) {
