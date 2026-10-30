@@ -48,6 +48,7 @@ fun CatalogPodcastDetailScreen(
     onBack: () -> Unit,
     onPlayEpisode: (CatalogEpisode) -> Unit = {},
     onDownloadEpisode: (CatalogEpisode) -> Unit = {},
+    onCancelDownload: (CatalogEpisode) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val episodes by catalogRepository.observeEpisodes(podcast.id).collectAsState(initial = emptyList())
@@ -135,6 +136,7 @@ fun CatalogPodcastDetailScreen(
                     progress = downloadProgress[episode.id],
                     onPlay = { onPlayEpisode(episode) },
                     onDownload = { onDownloadEpisode(episode) },
+                    onCancel = { onCancelDownload(episode) },
                 )
                 Spacer(modifier = Modifier.height(AuralisSpacing.X2))
             }
@@ -150,6 +152,7 @@ private fun EpisodeRow(
     progress: Float?,
     onPlay: () -> Unit,
     onDownload: () -> Unit,
+    onCancel: () -> Unit,
 ) {
     val canStream = episode.audioUrl.isNotBlank()
     Surface(
@@ -213,22 +216,25 @@ private fun EpisodeRow(
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
-                TextButton(
-                    onClick = onDownload,
-                    enabled = canStream && !isDownloaded && !isDownloading,
-                ) {
-                    Text(
-                        text = when {
-                            isDownloaded -> "✓ دانلود شده"
-                            isDownloading -> "…"
-                            else -> "↓ دانلود خصوصی"
-                        },
-                        color = when {
-                            isDownloaded -> AuralisColors.Success
-                            else -> AuralisColors.TextSecondary
-                        },
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                if (isDownloading) {
+                    TextButton(onClick = onCancel) {
+                        Text(
+                            text = "لغو",
+                            color = AuralisColors.Error,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                } else {
+                    TextButton(
+                        onClick = onDownload,
+                        enabled = canStream && !isDownloaded,
+                    ) {
+                        Text(
+                            text = if (isDownloaded) "✓ دانلود شده" else "↓ دانلود خصوصی",
+                            color = if (isDownloaded) AuralisColors.Success else AuralisColors.TextSecondary,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
             }
         }
