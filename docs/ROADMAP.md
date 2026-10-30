@@ -1,25 +1,25 @@
 # Auralis Roadmap
 
-## v0.1.0 (code complete on main)
+## v0.1.0 — frozen
 
-- [x] Offline library + Media3 playback + UI (Library, Now Playing, Mini Player, Explore, Profile)
-- [x] Private downloads, stream samples, cancel/progress
-- [x] Persistence tests, URI safety, PlaybackErrorMapper
-- [x] Brand icon pipeline in CI
-- [x] versionName `0.1.0` / versionCode `1`
-- [x] RELEASE.md install / upgrade notes
+Code + docs milestone on `main`. Tag name: **`v0.1.0`** (create Release on GitHub if not present).
 
-## Owner actions still open (not blocking further code)
+- [x] Offline library + Media3 + UI
+- [x] Private downloads + sample stream
+- [x] Persistence / URI safety / error mapping
+- [x] Brand icon CI pipeline
+- [x] versionName `0.1.0` / VERSION file
+- [x] LICENSE (All Rights Reserved)
+- [x] RELEASE.md
 
-- [ ] Confirm TalkBack / system media controls on preferred devices (optional)
-- [ ] Choose open-source or proprietary **License**
-- [ ] Upload real release keystore via Secrets for non-debug release APKs
-- [ ] Enable GitHub **branch protection** on `main`
-- [ ] Host + API when ready (#14+)
+## Owner-only leftovers (optional)
+
+- [ ] Publish GitHub Release + tag `v0.1.0`
+- [ ] Production keystore in Secrets
+- [ ] Branch protection on `main`
 
 ## After v0.1
 
-1. #14 API / hosting decision  
-2. #15 wire real catalog  
+1. #14 API / hosting  
+2. #15 real catalog  
 3. #16 publishing workflow  
-4. Optional: Search, Onboarding, queue, encryption  
