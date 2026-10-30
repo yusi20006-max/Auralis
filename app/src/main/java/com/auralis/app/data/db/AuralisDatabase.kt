@@ -8,7 +8,7 @@ import androidx.room.RoomDatabase
 @Database(
     entities = [EpisodeEntity::class],
     version = 1,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class AuralisDatabase : RoomDatabase() {
     abstract fun episodeDao(): EpisodeDao
