@@ -52,6 +52,7 @@ fun ExploreScreen(
     onImportClick: () -> Unit,
     onStreamEpisode: (CatalogPodcast, CatalogEpisode) -> Unit = { _, _ -> },
     onDownloadEpisode: (CatalogPodcast, CatalogEpisode) -> Unit = { _, _ -> },
+    onCancelDownload: (CatalogPodcast, CatalogEpisode) -> Unit = { _, _ -> },
     downloadedRemoteIds: Set<String> = emptySet(),
     downloadingRemoteIds: Set<String> = emptySet(),
     downloadProgress: Map<String, Float> = emptyMap(),
@@ -75,6 +76,7 @@ fun ExploreScreen(
             onBack = { selectedPodcast = null },
             onPlayEpisode = { episode -> onStreamEpisode(podcast, episode) },
             onDownloadEpisode = { episode -> onDownloadEpisode(podcast, episode) },
+            onCancelDownload = { episode -> onCancelDownload(podcast, episode) },
             modifier = modifier,
         )
         return
