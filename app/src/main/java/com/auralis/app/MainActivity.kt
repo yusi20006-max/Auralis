@@ -276,6 +276,7 @@ class MainActivity : ComponentActivity() {
                 val currentEpisode = episodes.find { it.id == currentEpisodeId }
                 val playbackSpeed by playbackPreferences.speed.collectAsState()
                 val downloadingRemoteIds by libraryRepository.downloadingRemoteIds.collectAsState()
+                val downloadProgress by libraryRepository.downloadProgress.collectAsState()
                 val downloadedRemoteIds = episodes.mapNotNull { ep ->
                     ep.remoteId?.takeIf { libraryRepository.isDownloaded(it) }
                 }.toSet()
@@ -419,6 +420,7 @@ class MainActivity : ComponentActivity() {
                                                     onImportClick = { openAudio.launch(arrayOf("audio/*")) },
                                                     downloadedRemoteIds = downloadedRemoteIds,
                                                     downloadingRemoteIds = downloadingRemoteIds,
+                                                    downloadProgress = downloadProgress,
                                                     onStreamEpisode = { podcast, catalogEpisode ->
                                                         if (catalogEpisode.audioUrl.isBlank()) return@ExploreScreen
                                                         val episode = libraryRepository.addOrGetStreamEpisode(
