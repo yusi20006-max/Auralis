@@ -1,10 +1,9 @@
 package com.auralis.app.data.db
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -18,10 +17,17 @@ interface EpisodeDao {
     @Query("SELECT * FROM episodes WHERE remoteId = :remoteId LIMIT 1")
     suspend fun getByRemoteId(remoteId: String): EpisodeEntity?
 
+    @Query("SELECT * FROM episodes WHERE sourceId = :sourceId AND remoteId = :remoteId LIMIT 1")
+    suspend fun getBySourceAndRemoteId(sourceId: String, remoteId: String): EpisodeEntity?
+
     @Query("SELECT * FROM episodes WHERE localUri = :localUri LIMIT 1")
     suspend fun getByLocalUri(localUri: String): EpisodeEntity?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    /**
+     * Uses primary-key upsert semantics. SQLite REPLACE would delete the old row
+     * on a composite-identity conflict and could discard playback/download state.
+     */
+    @Upsert
     suspend fun upsert(episode: EpisodeEntity)
 
     /**
