@@ -1,9 +1,11 @@
 package com.auralis.app.data.db
 
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
-import androidx.room.Upsert
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -24,11 +26,24 @@ interface EpisodeDao {
     suspend fun getByLocalUri(localUri: String): EpisodeEntity?
 
     /**
-     * Uses primary-key upsert semantics. SQLite REPLACE would delete the old row
-     * on a composite-identity conflict and could discard playback/download state.
+     * Updates only by the stable primary key. A new row is inserted with ABORT
+     * semantics, so a collision on the secondary (sourceId, remoteId) identity
+     * cannot REPLACE and delete an existing episode with its playback/download state.
      */
-    @Upsert
-    suspend fun upsert(episode: EpisodeEntity)
+    @Transaction
+    suspend fun upsert(episode: EpisodeEntity) {
+        if (getById(episode.id) == null) {
+            insert(episode)
+        } else {
+            update(episode)
+        }
+    }
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(episode: EpisodeEntity)
+
+    @Update
+    suspend fun update(episode: EpisodeEntity): Int
 
     /**
      * Serializes the lookup and insert in one Room transaction so concurrent
