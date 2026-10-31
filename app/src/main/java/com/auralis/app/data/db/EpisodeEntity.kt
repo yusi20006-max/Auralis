@@ -1,11 +1,15 @@
 package com.auralis.app.data.db
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.auralis.app.data.Episode
 import android.net.Uri
 
-@Entity(tableName = "episodes")
+@Entity(
+    tableName = "episodes",
+    indices = [Index(value = ["sourceId", "remoteId"], unique = true)],
+)
 data class EpisodeEntity(
     @PrimaryKey val id: String,
     val title: String,
@@ -19,6 +23,7 @@ data class EpisodeEntity(
     val isAiGenerated: Boolean = true,
     val lastPositionMs: Long = 0L,
     val lastPlayedAt: Long? = null,
+    val sourceId: String? = null,
 ) {
     fun toEpisode(): Episode = Episode(
         id = id,
@@ -33,6 +38,7 @@ data class EpisodeEntity(
         isAiGenerated = isAiGenerated,
         lastPositionMs = lastPositionMs,
         lastPlayedAt = lastPlayedAt,
+        sourceId = sourceId,
     )
 
     companion object {
@@ -49,6 +55,7 @@ data class EpisodeEntity(
             isAiGenerated = episode.isAiGenerated,
             lastPositionMs = episode.lastPositionMs,
             lastPlayedAt = episode.lastPlayedAt,
+            sourceId = episode.sourceId,
         )
     }
 }
