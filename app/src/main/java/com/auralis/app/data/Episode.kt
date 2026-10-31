@@ -20,6 +20,11 @@ data class Episode(
     val isAiGenerated: Boolean = true,
     val lastPositionMs: Long = 0L,
     val lastPlayedAt: Long? = null,
+    /**
+     * Stable identity of the remote source. Null is retained for local-only
+     * episodes and legacy rows whose source cannot be established safely.
+     */
+    val sourceId: String? = null,
 ) {
     val hasLocalSource: Boolean get() = localUri != null
     val progressFraction: Float
