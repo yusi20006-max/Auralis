@@ -9,11 +9,15 @@ import com.auralis.app.data.catalog.CatalogEpisode
 import com.auralis.app.data.catalog.CatalogPodcast
 import com.auralis.app.data.db.AuralisDatabase
 import com.auralis.app.data.db.EpisodeEntity
+import com.auralis.app.data.download.DownloadCancelledException
+import com.auralis.app.data.download.DownloadIdentity
+import com.auralis.app.data.download.DownloadStore
 import com.auralis.app.data.download.PrivateDownloadStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -22,11 +26,17 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -270,4 +280,124 @@ class LibraryRepositoryTest {
         assertNotNull(legacy)
         assertNull(legacy!!.sourceId)
     }
+    @Test
+    fun sameRemoteIdFromDifferentSourcesDownloadsConcurrentlyWithIndependentProgress() = runBlocking {
+        val store = RecordingDownloadStore(started = CountDownLatch(2), release = CountDownLatch(1))
+        val testRepository = LibraryRepository(database.episodeDao(), store, repositoryScope)
+        val first = DownloadIdentity("catalog:auralis", sampleEpisode.id)
+        val second = DownloadIdentity("rss:feed-42", sampleEpisode.id)
+        val firstTask = async(Dispatchers.IO) { testRepository.downloadEpisodeOffline(first, sampleEpisode, samplePodcast) }
+        val secondTask = async(Dispatchers.IO) { testRepository.downloadEpisodeOffline(second, sampleEpisode, samplePodcast) }
+
+        assertTrue("both source identities should enter download concurrently", store.started!!.await(5, TimeUnit.SECONDS))
+        val active = testRepository.downloadingIdentities.first { it.contains(first) && it.contains(second) }
+        assertEquals(setOf(first, second), active)
+        val progress = testRepository.downloadProgress.first { it[first] == 0.4f && it[second] == 0.4f }
+        assertEquals(0.4f, progress[first]!!)
+        assertEquals(0.4f, progress[second]!!)
+
+        store.release!!.countDown()
+        val firstEpisode = firstTask.await()
+        val secondEpisode = secondTask.await()
+        assertEquals(first.sourceId, firstEpisode?.sourceId)
+        assertEquals(second.sourceId, secondEpisode?.sourceId)
+        assertEquals(2, store.totalCalls.get())
+        assertFalse(testRepository.downloadingIdentities.value.contains(first))
+        assertFalse(testRepository.downloadingIdentities.value.contains(second))
+        assertFalse(testRepository.downloadProgress.value.containsKey(first))
+        assertFalse(testRepository.downloadProgress.value.containsKey(second))
+    }
+
+    @Test
+    fun cancellingOneSourceDoesNotCancelAnotherWithSameRemoteId() = runBlocking {
+        val store = RecordingDownloadStore(started = CountDownLatch(2), release = CountDownLatch(1))
+        val testRepository = LibraryRepository(database.episodeDao(), store, repositoryScope)
+        val first = DownloadIdentity("catalog:auralis", sampleEpisode.id)
+        val second = DownloadIdentity("rss:feed-42", sampleEpisode.id)
+        val firstTask = async(Dispatchers.IO) { testRepository.downloadEpisodeOffline(first, sampleEpisode, samplePodcast) }
+        val secondTask = async(Dispatchers.IO) { testRepository.downloadEpisodeOffline(second, sampleEpisode, samplePodcast) }
+
+        assertTrue(store.started!!.await(5, TimeUnit.SECONDS))
+        testRepository.cancelDownload(first)
+        store.release!!.countDown()
+        assertNull(firstTask.await())
+        assertEquals(second.sourceId, secondTask.await()?.sourceId)
+        assertEquals(setOf(first), store.cancelled.toSet())
+        assertTrue(store.completed.contains(second))
+        assertFalse(store.completed.contains(first))
+    }
+
+    @Test
+    fun retryErrorAndProgressRemainScopedToTheirSourceIdentity() = runBlocking {
+        val first = DownloadIdentity("catalog:auralis", sampleEpisode.id)
+        val second = DownloadIdentity("rss:feed-42", sampleEpisode.id)
+        val store = RecordingDownloadStore(failNext = setOf(first))
+        val testRepository = LibraryRepository(database.episodeDao(), store, repositoryScope)
+        val firstTask = async(Dispatchers.IO) { testRepository.downloadEpisodeOffline(first, sampleEpisode, samplePodcast) }
+        val secondTask = async(Dispatchers.IO) { testRepository.downloadEpisodeOffline(second, sampleEpisode, samplePodcast) }
+
+        assertNull(firstTask.await())
+        assertEquals(second.sourceId, secondTask.await()?.sourceId)
+        assertTrue(testRepository.downloadErrors.value.containsKey(first))
+        assertFalse(testRepository.downloadErrors.value.containsKey(second))
+        val retry = testRepository.downloadEpisodeOffline(first, sampleEpisode, samplePodcast)
+        assertEquals(first.sourceId, retry?.sourceId)
+        assertFalse(testRepository.downloadErrors.value.containsKey(first))
+        assertEquals(2, store.callsFor(first))
+        assertEquals(1, store.callsFor(second))
+    }
+
+    @Test
+    fun concurrentRequestsForSameIdentityShareOneDownloadAndOneLibraryRow() = runBlocking {
+        val identity = DownloadIdentity("catalog:auralis", sampleEpisode.id)
+        val store = RecordingDownloadStore(started = CountDownLatch(1), release = CountDownLatch(1))
+        val testRepository = LibraryRepository(database.episodeDao(), store, repositoryScope)
+        val firstTask = async(Dispatchers.IO) { testRepository.downloadEpisodeOffline(identity, sampleEpisode, samplePodcast) }
+        assertTrue(store.started!!.await(5, TimeUnit.SECONDS))
+        val secondTask = async(Dispatchers.IO) { testRepository.downloadEpisodeOffline(identity, sampleEpisode, samplePodcast) }
+        delay(100)
+        assertEquals("the second same-identity request must wait for the first", 1, store.callsFor(identity))
+        store.release!!.countDown()
+        val firstEpisode = firstTask.await()
+        val secondEpisode = secondTask.await()
+        assertNotNull(firstEpisode)
+        assertEquals(firstEpisode?.id, secondEpisode?.id)
+        assertEquals(1, store.callsFor(identity))
+        assertEquals(1, database.episodeDao().observeAll().first().count {
+            it.sourceId == identity.sourceId && it.remoteId == identity.remoteId
+        })
+    }
+
+    private class RecordingDownloadStore(
+        val started: CountDownLatch? = null,
+        val release: CountDownLatch? = null,
+        failNext: Set<DownloadIdentity> = emptySet(),
+    ) : DownloadStore {
+        val completed = ConcurrentHashMap.newKeySet<DownloadIdentity>()
+        val cancelled = ConcurrentHashMap.newKeySet<DownloadIdentity>()
+        private val failures = ConcurrentHashMap.newKeySet<DownloadIdentity>().apply { addAll(failNext) }
+        private val calls = ConcurrentHashMap<DownloadIdentity, AtomicInteger>()
+        val totalCalls = AtomicInteger()
+        fun callsFor(identity: DownloadIdentity): Int = calls[identity]?.get() ?: 0
+
+        override fun hasLocalCopy(identity: DownloadIdentity): Boolean = completed.contains(identity)
+        override fun uriForIdentity(identity: DownloadIdentity): Uri? =
+            if (completed.contains(identity)) Uri.parse("content://test/\${identity.sourceId}/\${identity.remoteId}") else null
+        override fun cancel(identity: DownloadIdentity) { cancelled.add(identity) }
+
+        override fun download(identity: DownloadIdentity, url: String, onProgress: ((Float) -> Unit)?): Uri {
+            totalCalls.incrementAndGet()
+            calls.computeIfAbsent(identity) { AtomicInteger() }.incrementAndGet()
+            onProgress?.invoke(0.4f)
+            started?.countDown()
+            if (release != null && !release.await(5, TimeUnit.SECONDS)) throw IOException("Timed out waiting for test release")
+            if (cancelled.contains(identity)) throw DownloadCancelledException(identity.remoteId)
+            if (failures.remove(identity)) throw IOException("Simulated source-scoped failure")
+            completed.add(identity)
+            onProgress?.invoke(1f)
+            return uriForIdentity(identity)!!
+        }
+        override fun deleteExact(identity: DownloadIdentity): Boolean = completed.remove(identity)
+    }
+
 }
