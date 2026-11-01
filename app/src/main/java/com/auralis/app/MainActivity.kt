@@ -38,6 +38,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.auralis.app.BuildConfig
 import com.auralis.app.data.Episode
 import com.auralis.app.data.LibraryRepository
 import com.auralis.app.data.LocalUriAccess
@@ -363,6 +364,8 @@ class MainActivity : ComponentActivity() {
                                     applyPlaybackSpeed(speed)
                                 },
                                 onBack = { showSettings = false },
+                                versionName = BuildConfig.VERSION_NAME,
+                                versionCode = BuildConfig.VERSION_CODE,
                             )
                         }
                         else -> {
@@ -513,6 +516,8 @@ class MainActivity : ComponentActivity() {
                                             AuralisDestination.Profile -> {
                                                 ProfileScreen(
                                                     episodeCount = episodes.size,
+                                                    versionName = BuildConfig.VERSION_NAME,
+                                                    versionCode = BuildConfig.VERSION_CODE,
                                                     onOpenSettings = { showSettings = true },
                                                 )
                                             }
