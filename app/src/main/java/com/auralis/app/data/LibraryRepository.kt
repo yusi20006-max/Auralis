@@ -9,6 +9,8 @@ import com.auralis.app.data.db.AuralisDatabase
 import com.auralis.app.data.db.EpisodeDao
 import com.auralis.app.data.db.EpisodeEntity
 import com.auralis.app.data.download.DownloadCancelledException
+import com.auralis.app.data.download.DownloadIdentity
+import com.auralis.app.data.download.DownloadStore
 import com.auralis.app.data.download.InsufficientSpaceException
 import com.auralis.app.data.download.PrivateDownloadStore
 import kotlinx.coroutines.CoroutineScope
@@ -29,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 class LibraryRepository internal constructor(
     private val dao: EpisodeDao,
-    private val downloadStore: PrivateDownloadStore,
+    private val downloadStore: DownloadStore,
     private val scope: CoroutineScope,
 ) {
     constructor(context: Context) : this(
@@ -45,16 +47,22 @@ class LibraryRepository internal constructor(
     private val _currentEpisodeId = MutableStateFlow<String?>(null)
     val currentEpisodeId: StateFlow<String?> = _currentEpisodeId.asStateFlow()
 
-    private val _downloadingRemoteIds = MutableStateFlow<Set<String>>(emptySet())
-    val downloadingRemoteIds: StateFlow<Set<String>> = _downloadingRemoteIds.asStateFlow()
+    private val _downloadingIdentities = MutableStateFlow<Set<DownloadIdentity>>(emptySet())
+    val downloadingIdentities: StateFlow<Set<DownloadIdentity>> = _downloadingIdentities.asStateFlow()
 
-    private val _downloadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
-    val downloadProgress: StateFlow<Map<String, Float>> = _downloadProgress.asStateFlow()
+    private val _downloadProgress = MutableStateFlow<Map<DownloadIdentity, Float>>(emptyMap())
+    val downloadProgress: StateFlow<Map<DownloadIdentity, Float>> = _downloadProgress.asStateFlow()
 
-    private val _lastDownloadError = MutableStateFlow<String?>(null)
-    val lastDownloadError: StateFlow<String?> = _lastDownloadError.asStateFlow()
+    private val _downloadErrors = MutableStateFlow<Map<DownloadIdentity, String>>(emptyMap())
+    val downloadErrors: StateFlow<Map<DownloadIdentity, String>> = _downloadErrors.asStateFlow()
 
-    private val downloadMutexes = ConcurrentHashMap<String, Mutex>()
+    /** Compatibility summary for the existing app-wide error banner. */
+    val lastDownloadError: StateFlow<String?> = _downloadErrors
+        .map { errors -> errors.values.lastOrNull() }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    // A single identity serializes its own requests; different sources never share a lock.
+    private val downloadMutexes = ConcurrentHashMap<DownloadIdentity, Mutex>()
 
     suspend fun addLocalEpisode(
         uri: Uri,
@@ -139,60 +147,60 @@ class LibraryRepository internal constructor(
         episode
     }
 
-    fun isDownloaded(remoteId: String): Boolean =
-        downloadStore.hasLocalCopy(CatalogConfig.SOURCE_ID, remoteId)
+    fun isDownloaded(identity: DownloadIdentity): Boolean =
+        downloadStore.hasLocalCopy(identity)
 
-    fun cancelDownload(remoteId: String) {
-        downloadStore.cancel(CatalogConfig.SOURCE_ID, remoteId)
+    fun cancelDownload(identity: DownloadIdentity) {
+        downloadStore.cancel(identity)
     }
 
-    fun clearDownloadError() {
-        _lastDownloadError.value = null
+    fun clearDownloadError(identity: DownloadIdentity? = null) {
+        _downloadErrors.value = if (identity == null) emptyMap() else _downloadErrors.value - identity
     }
 
     suspend fun downloadEpisodeOffline(
         catalogEpisode: CatalogEpisode,
         podcast: CatalogPodcast?,
     ): Episode? = withContext(Dispatchers.IO) {
-        val sourceId = CatalogConfig.SOURCE_ID
-        val remoteId = catalogEpisode.id
+        val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, catalogEpisode.id)
         val url = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
         if (url.isBlank()) {
-            _lastDownloadError.value = "آدرس فایل خالی است."
+            _downloadErrors.value = _downloadErrors.value + (identity to "آدرس فایل خالی است.")
             return@withContext null
         }
 
-        if (remoteId in _downloadingRemoteIds.value) {
-            return@withContext null
-        }
-
-        val mutex = downloadMutexes.getOrPut(remoteId) { Mutex() }
+        val mutex = downloadMutexes.getOrPut(identity) { Mutex() }
         mutex.withLock {
-            if (downloadStore.hasLocalCopy(sourceId, remoteId)) {
-                val uri = downloadStore.uriForIdentity(sourceId, remoteId)!!
-                return@withLock upsertDownloaded(catalogEpisode, podcast, url, uri)
+            // Re-check after acquiring the identity lock: concurrent duplicate requests
+            // converge on the first completed file and never download/write it twice.
+            if (downloadStore.hasLocalCopy(identity)) {
+                val uri = downloadStore.uriForIdentity(identity)
+                    ?: return@withLock null
+                return@withLock upsertDownloaded(catalogEpisode, podcast, url, uri, identity)
             }
 
-            _lastDownloadError.value = null
-            _downloadingRemoteIds.value = _downloadingRemoteIds.value + remoteId
-            _downloadProgress.value = _downloadProgress.value + (remoteId to 0f)
+            _downloadErrors.value = _downloadErrors.value - identity
+            _downloadingIdentities.value = _downloadingIdentities.value + identity
+            _downloadProgress.value = _downloadProgress.value + (identity to 0f)
             try {
-                val fileUri = downloadStore.download(sourceId, remoteId, url) { p ->
-                    _downloadProgress.value = _downloadProgress.value + (remoteId to p)
+                val fileUri = downloadStore.download(identity, url) { progress ->
+                    _downloadProgress.value = _downloadProgress.value + (identity to progress)
                 }
-                upsertDownloaded(catalogEpisode, podcast, url, fileUri)
+                upsertDownloaded(catalogEpisode, podcast, url, fileUri, identity)
             } catch (_: DownloadCancelledException) {
-                _lastDownloadError.value = null
+                _downloadErrors.value = _downloadErrors.value - identity
                 null
             } catch (_: InsufficientSpaceException) {
-                _lastDownloadError.value = "فضای ذخیره‌سازی کافی نیست."
+                _downloadErrors.value = _downloadErrors.value +
+                    (identity to "فضای ذخیره‌سازی کافی نیست.")
                 null
             } catch (_: Exception) {
-                _lastDownloadError.value = "دانلود انجام نشد. اتصال را بررسی کنید و دوباره تلاش کنید."
+                _downloadErrors.value = _downloadErrors.value +
+                    (identity to "دانلود انجام نشد. اتصال را بررسی کنید و دوباره تلاش کنید.")
                 null
             } finally {
-                _downloadingRemoteIds.value = _downloadingRemoteIds.value - remoteId
-                _downloadProgress.value = _downloadProgress.value - remoteId
+                _downloadingIdentities.value = _downloadingIdentities.value - identity
+                _downloadProgress.value = _downloadProgress.value - identity
             }
         }
     }
@@ -202,9 +210,10 @@ class LibraryRepository internal constructor(
         podcast: CatalogPodcast?,
         url: String,
         fileUri: Uri,
+        identity: DownloadIdentity,
     ): Episode {
-        val sourceId = CatalogConfig.SOURCE_ID
-        val remoteId = catalogEpisode.id
+        val sourceId = identity.sourceId!!
+        val remoteId = identity.remoteId
 
         val existing = findCatalogEpisodeSuspend(sourceId, remoteId)
         if (existing != null) {
