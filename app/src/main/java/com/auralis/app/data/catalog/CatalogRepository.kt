@@ -1,5 +1,6 @@
 package com.auralis.app.data.catalog
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -99,6 +100,8 @@ class CatalogRepository(
             val state = CatalogLoadState.Success(parsed.podcasts.size, parsed.episodes.size)
             _loadState.value = state
             state
+        } catch (failure: CancellationException) {
+            throw failure
         } catch (failure: Exception) {
             // Do not expose raw URLs, response bodies, or arbitrary server text to UI state.
             val detail = (failure as? CatalogHttpException)?.message
