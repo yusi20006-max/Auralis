@@ -5,8 +5,13 @@ import android.net.Uri
 import java.io.File
 
 /**
- * Issue #11 — probe whether a local media URI is still readable.
- * Network (http/https) URIs are not probed here; the player handles those.
+ * Issue #11 / Stage 8 — resolve a playable URI without crashing on revoked SAF,
+ * missing files, or offline conditions.
+ *
+ * Priority:
+ * 1. Episode.localUri when still readable (or already a remote http(s) URI)
+ * 2. Optional private-download URI (source-aware store) when local row is stale
+ * 3. Episode.audioUrl stream as last resort (requires network)
  */
 object LocalUriAccess {
 
@@ -18,6 +23,7 @@ object LocalUriAccess {
     /**
      * Returns true when the app can open [uri] for reading right now.
      * Catches revoked SAF permissions, missing files, and invalid paths without throwing.
+     * Network URIs are treated as reachable at the probe layer; the player reports real IO errors.
      */
     fun canRead(context: Context, uri: Uri): Boolean {
         if (isRemote(uri)) return true
@@ -32,7 +38,6 @@ object LocalUriAccess {
                     context.contentResolver.openInputStream(uri)?.use { true } ?: false
                 }
                 else -> {
-                    // Unknown scheme: attempt open once.
                     context.contentResolver.openInputStream(uri)?.use { true } ?: false
                 }
             }
@@ -44,12 +49,21 @@ object LocalUriAccess {
     }
 
     /**
-     * Prefer a readable local URI; otherwise fall back to remote [Episode.audioUrl].
+     * Prefer a readable local / private-download URI; otherwise fall back to remote [Episode.audioUrl].
      */
-    fun resolvePlayableUri(context: Context, episode: Episode): Uri? {
+    fun resolvePlayableUri(
+        context: Context,
+        episode: Episode,
+        privateDownloadUri: Uri? = null,
+    ): Uri? {
         val local = episode.localUri
         if (local != null) {
             if (isRemote(local) || canRead(context, local)) return local
+        }
+        if (privateDownloadUri != null) {
+            if (isRemote(privateDownloadUri) || canRead(context, privateDownloadUri)) {
+                return privateDownloadUri
+            }
         }
         val remote = episode.audioUrl?.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
         if (remote != null) return remote
