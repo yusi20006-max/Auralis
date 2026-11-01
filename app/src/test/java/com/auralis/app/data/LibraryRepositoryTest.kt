@@ -264,7 +264,7 @@ class LibraryRepositoryTest {
     }
 
     @Test
-    fun downloadCreatesItsOwnLibraryRecordWithoutPriorAddAction() = runBlocking {
+    fun downloadCreatesNonMemberRecordWithoutPriorAddAction() = runBlocking {
         val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, sampleEpisode.id)
         val store = RecordingDownloadStore()
         val testRepository = LibraryRepository(database.episodeDao(), store, repositoryScope)
