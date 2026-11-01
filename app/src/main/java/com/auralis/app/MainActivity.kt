@@ -435,25 +435,17 @@ class MainActivity : ComponentActivity() {
                                 },
                             ) { padding ->
                                 Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-                                    if (hasPlayerError && playerErrorMessage != null) {
+                                    if (hasPlayerError || lastDownloadError != null) {
                                         AuralisErrorBanner(
-                                            message = playerErrorMessage!!,
-                                            onDismiss = {
+                                            message = playerErrorMessage
+                                                ?: lastDownloadError
+                                                ?: "پخش یا دانلود ممکن نشد. اتصال یا فایل را بررسی کنید.",
+                                            actionLabel = "باشه",
+                                            onAction = {
                                                 hasPlayerError = false
                                                 playerErrorMessage = null
+                                                libraryRepository.clearDownloadError()
                                             },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(
-                                                    horizontal = AuralisSpacing.X4,
-                                                    vertical = AuralisSpacing.X2,
-                                                ),
-                                        )
-                                    }
-                                    if (lastDownloadError != null) {
-                                        AuralisErrorBanner(
-                                            message = lastDownloadError!!,
-                                            onDismiss = { libraryRepository.clearDownloadError() },
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(
