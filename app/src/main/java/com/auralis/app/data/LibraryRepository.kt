@@ -260,12 +260,14 @@ class LibraryRepository internal constructor(
     fun deleteDownload(episodeId: String) {
         scope.launch {
             val entity = dao.getById(episodeId) ?: return@launch
+            val sourceId = entity.sourceId?.takeIf { it.isNotBlank() } ?: return@launch
             val remoteId = entity.remoteId?.takeIf { it.isNotBlank() } ?: return@launch
-            val exactFile = downloadStore.fileForIdentity(entity.sourceId, remoteId)
-            if (!exactFile.isFile) return@launch
 
-            downloadStore.delete(entity.sourceId, remoteId)
-            dao.updateLocalUri(episodeId, null)
+            // Null-source rows address ambiguous legacy storage; never delete those files.
+            // Keep the database URI unless the exact source-owned file is removed.
+            if (downloadStore.deleteExact(sourceId, remoteId)) {
+                dao.updateLocalUri(episodeId, null)
+            }
         }
     }
 
