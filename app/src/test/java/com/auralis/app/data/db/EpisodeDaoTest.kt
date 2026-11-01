@@ -1,6 +1,7 @@
 package com.auralis.app.data.db
 
 import android.content.Context
+import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -10,6 +11,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -43,23 +45,25 @@ class EpisodeDaoTest {
         remoteId: String? = null,
         localUri: String? = null,
         lastPlayedAt: Long? = null,
+        sourceId: String? = null,
     ) = EpisodeEntity(
         id = id,
         title = title,
         remoteId = remoteId,
         localUri = localUri,
         lastPlayedAt = lastPlayedAt,
+        sourceId = sourceId,
     )
 
     @Test
     fun upsertThenGetByIdReturnsTheSameRow() = runBlocking {
-        val e = entity("a", title = "عنوان", localUri = "content://x/1")
+        val e = entity("a", title = "title", localUri = "content://x/1")
         dao.upsert(e)
         assertEquals(e, dao.getById("a"))
     }
 
     @Test
-    fun upsertWithSameIdReplacesInsteadOfDuplicating() = runBlocking {
+    fun upsertWithSameIdUpdatesInsteadOfDuplicating() = runBlocking {
         dao.upsert(entity("a", title = "old"))
         dao.upsert(entity("a", title = "new"))
         val all = dao.observeAll().first()
@@ -78,6 +82,48 @@ class EpisodeDaoTest {
         dao.upsert(entity("b"))
         assertEquals("a", dao.getByRemoteId("remote-1")?.id)
         assertNull(dao.getByRemoteId("remote-404"))
+    }
+
+    @Test
+    fun compositeIdentityFindsTheMatchingSourceAndRemoteId() = runBlocking {
+        dao.upsert(entity("a", remoteId = "same", sourceId = "catalog:auralis"))
+        dao.upsert(entity("b", remoteId = "same", sourceId = "rss:feed-1"))
+
+        assertEquals("a", dao.getBySourceAndRemoteId("catalog:auralis", "same")?.id)
+        assertEquals("b", dao.getBySourceAndRemoteId("rss:feed-1", "same")?.id)
+    }
+
+    @Test
+    fun duplicateCompositeIdentityIsRejectedWithoutReplacingExistingRow() = runBlocking {
+        dao.upsert(entity("original", title = "keep me", remoteId = "remote-1", sourceId = "catalog:auralis"))
+
+        assertThrows(SQLiteConstraintException::class.java) {
+            runBlocking {
+                dao.upsert(entity("duplicate", title = "must not replace", remoteId = "remote-1", sourceId = "catalog:auralis"))
+            }
+        }
+
+        val original = dao.getById("original")
+        assertEquals("keep me", original?.title)
+        assertNull(dao.getById("duplicate"))
+    }
+
+    @Test
+    fun sameRemoteIdFromDifferentSourcesIsAllowed() = runBlocking {
+        dao.upsert(entity("a", remoteId = "remote-1", sourceId = "catalog:auralis"))
+        dao.upsert(entity("b", remoteId = "remote-1", sourceId = "rss:feed-1"))
+        assertNotNull(dao.getById("a"))
+        assertNotNull(dao.getById("b"))
+    }
+
+    @Test
+    fun multipleLocalAndLegacyRowsWithNullIdentityRemainAllowed() = runBlocking {
+        dao.upsert(entity("local-a"))
+        dao.upsert(entity("local-b"))
+        dao.upsert(entity("legacy-a", remoteId = "old-remote"))
+        dao.upsert(entity("legacy-b", remoteId = "old-remote"))
+
+        assertEquals(4, dao.observeAll().first().size)
     }
 
     @Test
@@ -104,7 +150,6 @@ class EpisodeDaoTest {
         dao.upsert(entity("a"))
         dao.updateLocalUri("a", "content://x/9")
         assertEquals("content://x/9", dao.getById("a")?.localUri)
-        // A deleted/unreadable local file can be detached without losing the episode.
         dao.updateLocalUri("a", null)
         val row = dao.getById("a")
         assertNotNull(row)
@@ -147,7 +192,6 @@ class EpisodeDaoTest {
             first.episodeDao().updatePosition("a", positionMs = 77_000L, playedAt = 1_700_000_000_000L)
             first.close()
 
-            // A new database object on the same file simulates killing and reopening the app.
             val second = Room.databaseBuilder(context, AuralisDatabase::class.java, name)
                 .allowMainThreadQueries()
                 .build()
