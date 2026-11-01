@@ -23,6 +23,76 @@ import kotlin.concurrent.thread
 class CatalogRepositoryTest {
 
     @Test
+    fun observePodcastsReturnsSeededCatalog() = runBlocking {
+        val repository = CatalogRepository()
+        val podcasts = repository.observePodcasts().first()
+        assertTrue(podcasts.isNotEmpty())
+        assertTrue(podcasts.all { it.id.isNotBlank() && it.title.isNotBlank() })
+    }
+
+    @Test
+    fun observePodcastsFiltersByCategory() = runBlocking {
+        val repository = CatalogRepository()
+        val philosophy = repository.observePodcasts("فلسفه").first()
+        assertTrue(philosophy.isNotEmpty())
+        assertTrue(philosophy.all { it.category == "فلسفه" })
+
+        val all = repository.observePodcasts("همه").first()
+        assertTrue(all.size >= philosophy.size)
+    }
+
+    @Test
+    fun observeEpisodesForPodcastReturnsOnlyMatchingRows() = runBlocking {
+        val repository = CatalogRepository()
+        val episodes = repository.observeEpisodes("ai-philosophy").first()
+        assertTrue(episodes.isNotEmpty())
+        assertTrue(episodes.all { it.podcastId == "ai-philosophy" })
+        assertTrue(episodes.all { it.audioUrl.startsWith("http") })
+    }
+
+    @Test
+    fun getPodcastAndEpisodeLookup() {
+        val repository = CatalogRepository()
+        assertNotNull(repository.getPodcast("ai-science"))
+        assertNull(repository.getPodcast("missing-podcast"))
+        assertNotNull(repository.getEpisode("ep-sci-1"))
+        assertNull(repository.getEpisode("missing-episode"))
+    }
+
+    @Test
+    fun catalogSourceIdIsStableForHostedCatalog() {
+        assertEquals("catalog:auralis", CatalogConfig.SOURCE_ID)
+    }
+
+    @Test
+    fun defaultCatalogUrlPointsAtHostedJson() {
+        assertTrue(CatalogConfig.catalogUrl.contains("catalog.json"))
+        assertTrue(CatalogConfig.catalogUrl.startsWith("https://"))
+    }
+
+    @Test
+    fun resolveAudioUrlKeepsAbsoluteHttps() {
+        assertEquals(
+            "https://example.com/a.mp3",
+            CatalogConfig.resolveAudioUrl("https://example.com/a.mp3"),
+        )
+    }
+
+    @Test
+    fun resolveAudioUrlJoinsRelativePathWhenBaseConfigured() {
+        val previous = CatalogConfig.baseUrl
+        try {
+            CatalogConfig.baseUrl = "https://cdn.example/"
+            assertEquals(
+                "https://cdn.example/audio/ep1.mp3",
+                CatalogConfig.resolveAudioUrl("/audio/ep1.mp3"),
+            )
+        } finally {
+            CatalogConfig.baseUrl = previous
+        }
+    }
+
+    @Test
     fun refreshUsesRealHttpRequestAndReplacesSampleCatalogOnSuccess() = runBlocking {
         val previousUrl = CatalogConfig.catalogUrl
         LocalHttpServer(response = httpResponse(200, validCatalogJson())).use { server ->
