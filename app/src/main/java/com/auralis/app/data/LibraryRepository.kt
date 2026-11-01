@@ -104,7 +104,7 @@ class LibraryRepository internal constructor(
             return existing.copy(audioUrl = resolvedUrl)
         }
 
-        val privateUri = downloadStore.uriForIdentity(sourceId, remoteId)
+        val privateUri = downloadStore.uriForIdentity(DownloadIdentity(sourceId, remoteId))
         return Episode(
             id = UUID.randomUUID().toString(),
             title = catalogEpisode.title,
@@ -131,7 +131,7 @@ class LibraryRepository internal constructor(
             return@withContext existing.copy(audioUrl = resolvedUrl)
         }
 
-        val privateUri = downloadStore.uriForIdentity(sourceId, remoteId)
+        val privateUri = downloadStore.uriForIdentity(DownloadIdentity(sourceId, remoteId))
         val episode = Episode(
             id = UUID.randomUUID().toString(),
             title = catalogEpisode.title,
