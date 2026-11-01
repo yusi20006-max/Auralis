@@ -81,7 +81,34 @@ class CatalogRepositoryTest {
                     assertEquals(beforeEpisodes, repository.observeEpisodes().first())
                     assertEquals(result, repository.loadState.value)
                     assertFalse((result as CatalogLoadState.Error).message.contains("upstream detail"))
+                    assertFalse(result.message.contains("not-a-secret"))
                 }
+            }
+        } finally {
+            CatalogConfig.catalogUrl = previousUrl
+        }
+    }
+
+    @Test
+    fun failedRefreshAfterRemoteSuccessKeepsLastKnownGoodCatalog() = runBlocking {
+        val previousUrl = CatalogConfig.catalogUrl
+        try {
+            val repository = CatalogRepository(UrlConnectionCatalogHttpClient(1_000, 1_000))
+            LocalHttpServer(response = httpResponse(200, validCatalogJson())).use { successServer ->
+                CatalogConfig.catalogUrl = successServer.url
+                assertEquals(CatalogLoadState.Success(1, 1), repository.refresh())
+            }
+
+            val cachedPodcast = repository.getPodcast("remote-podcast")
+            val cachedEpisode = repository.getEpisode("remote-episode")
+            LocalHttpServer(response = httpResponse(503, """{"error":"unavailable"}""")).use { failedServer ->
+                CatalogConfig.catalogUrl = failedServer.url
+                val result = repository.refresh()
+
+                assertEquals(CatalogLoadState.Error("HTTP 503"), result)
+                assertEquals(cachedPodcast, repository.getPodcast("remote-podcast"))
+                assertEquals(cachedEpisode, repository.getEpisode("remote-episode"))
+                assertNull(repository.getPodcast("ai-philosophy"))
             }
         } finally {
             CatalogConfig.catalogUrl = previousUrl
