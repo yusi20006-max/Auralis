@@ -55,7 +55,11 @@ interface EpisodeDao {
             "A local episode must have a URI"
         }
         val existing = getByLocalUri(localUri)
-        if (existing != null) return existing
+        if (existing != null) {
+            val member = existing.copy(isInLibrary = true)
+            if (member != existing) update(member)
+            return member
+        }
         upsert(episode)
         return episode
     }
