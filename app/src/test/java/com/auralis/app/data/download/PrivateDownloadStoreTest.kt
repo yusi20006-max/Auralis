@@ -124,23 +124,23 @@ class PrivateDownloadStoreTest {
     }
 
     @Test
-    fun identityLookupFallsBackToLegacyRemoteIdOnlyFile() {
+    fun sourceAwareLookupDoesNotClaimAmbiguousLegacyRemoteIdOnlyFile() {
         val remoteId = "legacy-file-${System.nanoTime()}"
         val legacy = store.fileForRemoteId(remoteId)
         val primary = store.fileForIdentity("catalog:auralis", remoteId)
         legacy.parentFile?.mkdirs()
         legacy.writeBytes(ByteArray(128) { 9 })
         try {
-            assertFalse("primary composite path must not exist yet", primary.exists())
-            assertTrue(legacy.isFile && legacy.length() > 64)
-            assertTrue(store.hasLocalCopy("catalog:auralis", remoteId))
-            val uri = store.uriForIdentity("catalog:auralis", remoteId)
-            assertNotNull("legacy file must resolve to a playable URI", uri)
-            assertTrue(
-                uri!!.scheme == "content" || uri.scheme == "file",
+            assertFalse("primary composite path must not exist", primary.exists())
+            assertTrue("legacy file remains physically preserved", legacy.isFile)
+            assertFalse(
+                "unknown source ownership must not be auto-matched",
+                store.hasLocalCopy("catalog:auralis", remoteId),
             )
+            assertNull(store.uriForIdentity("catalog:auralis", remoteId))
+            assertTrue("ambiguous legacy file must not be deleted", legacy.exists())
         } finally {
-            store.delete("catalog:auralis", remoteId)
+            legacy.delete()
         }
     }
 
