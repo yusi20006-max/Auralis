@@ -65,9 +65,6 @@ class LibraryRepository internal constructor(
     // A single identity serializes its own requests; different sources never share a lock.
     private val downloadMutexes = ConcurrentHashMap<DownloadIdentity, Mutex>()
 
-    // Membership mutations are serialized separately from download file operations.
-    private val libraryMembershipMutexes = ConcurrentHashMap<DownloadIdentity, Mutex>()
-
     suspend fun addLocalEpisode(
         uri: Uri,
         title: String,
@@ -128,7 +125,7 @@ class LibraryRepository internal constructor(
     ): Episode = withContext(Dispatchers.IO) {
         val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, catalogEpisode.id)
         val resolvedUrl = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
-        val mutex = libraryMembershipMutexes.getOrPut(identity) { Mutex() }
+        val mutex = downloadMutexes.getOrPut(identity) { Mutex() }
 
         mutex.withLock {
             findCatalogEpisodeSuspend(identity.sourceId!!, identity.remoteId)?.let { existing ->
@@ -159,7 +156,7 @@ class LibraryRepository internal constructor(
      */
     suspend fun removeFromLibrary(identity: DownloadIdentity): Boolean = withContext(Dispatchers.IO) {
         val sourceId = identity.sourceId?.takeIf { it.isNotBlank() } ?: return@withContext false
-        val mutex = libraryMembershipMutexes.getOrPut(identity) { Mutex() }
+        val mutex = downloadMutexes.getOrPut(identity) { Mutex() }
 
         mutex.withLock {
             val existing = dao.getBySourceAndRemoteId(sourceId, identity.remoteId)
