@@ -382,7 +382,7 @@ class LibraryRepositoryTest {
 
         override fun hasLocalCopy(identity: DownloadIdentity): Boolean = completed.contains(identity)
         override fun uriForIdentity(identity: DownloadIdentity): Uri? =
-            if (completed.contains(identity)) Uri.parse("content://test/\${identity.sourceId}/\${identity.remoteId}") else null
+            if (completed.contains(identity)) Uri.parse("content://test/" + identity.sourceId + "/" + identity.remoteId) else null
         override fun cancel(identity: DownloadIdentity) { cancelled.add(identity) }
 
         override fun download(identity: DownloadIdentity, url: String, onProgress: ((Float) -> Unit)?): Uri {
