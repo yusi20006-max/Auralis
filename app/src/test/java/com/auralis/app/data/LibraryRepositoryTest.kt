@@ -268,7 +268,7 @@ class LibraryRepositoryTest {
 
     @Test
     fun explicitLibraryMembershipSurvivesDatabaseRestart() = runBlocking {
-        val databaseName = "catalog-library-restart-${'
+        val databaseName = "catalog-library-restart-" + System.nanoTime() + ".db"
         val resolved = repository.addOrGetStreamEpisode(sampleEpisode, samplePodcast)
 
         assertEquals(CatalogConfig.SOURCE_ID, resolved.sourceId)
