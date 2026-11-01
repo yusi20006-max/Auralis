@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -85,6 +86,9 @@ class LibraryRepository internal constructor(
      *   Play alone does **not** write a permanent Room membership.
      *
      * Permanent membership is created only by [addToLibrary] or [downloadEpisodeOffline].
+     *
+     * Legacy rows with matching remoteId but null sourceId are intentionally
+     * not claimed as catalog episodes (no guessed source assignment).
      */
     fun addOrGetStreamEpisode(
         catalogEpisode: CatalogEpisode,
@@ -94,7 +98,7 @@ class LibraryRepository internal constructor(
         val remoteId = catalogEpisode.id
         val resolvedUrl = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
 
-        val existing = findCatalogEpisode(sourceId, remoteId)
+        val existing = findCatalogEpisodeBlocking(sourceId, remoteId)
         if (existing != null) {
             val privateUri = downloadStore.uriForRemoteId(remoteId)
             if (privateUri != null && existing.localUri == null) {
@@ -132,7 +136,7 @@ class LibraryRepository internal constructor(
         val remoteId = catalogEpisode.id
         val resolvedUrl = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
 
-        findCatalogEpisode(sourceId, remoteId)?.let { existing ->
+        findCatalogEpisodeSuspend(sourceId, remoteId)?.let { existing ->
             return@withContext existing.copy(audioUrl = resolvedUrl)
         }
 
@@ -223,7 +227,7 @@ class LibraryRepository internal constructor(
         val sourceId = CatalogConfig.SOURCE_ID
         val remoteId = catalogEpisode.id
 
-        val existing = findCatalogEpisode(sourceId, remoteId)
+        val existing = findCatalogEpisodeSuspend(sourceId, remoteId)
         if (existing != null) {
             dao.updateLocalUri(existing.id, fileUri.toString())
             return existing.copy(localUri = fileUri, audioUrl = url)
@@ -246,22 +250,23 @@ class LibraryRepository internal constructor(
     }
 
     /**
-     * Composite lookup for hosted catalog episodes.
-     * Does not fall back to guessing a source for legacy rows with matching remoteId only.
+     * Composite lookup for hosted catalog episodes via DAO, with StateFlow fallback.
+     * Does not claim legacy rows (null sourceId) even if remoteId matches.
      */
-    private fun findCatalogEpisode(sourceId: String, remoteId: String): Episode? {
-        // Prefer in-memory snapshot for non-suspending call sites (stream resolve).
-        val fromFlow = episodes.value.find {
-            it.sourceId == sourceId && it.remoteId == remoteId
-        }
-        if (fromFlow != null) return fromFlow
-        return null
-    }
-
     private suspend fun findCatalogEpisodeSuspend(sourceId: String, remoteId: String): Episode? {
         dao.getBySourceAndRemoteId(sourceId, remoteId)?.toEpisode()?.let { return it }
         return episodes.value.find {
             it.sourceId == sourceId && it.remoteId == remoteId
+        }
+    }
+
+    /**
+     * Blocking composite lookup for non-suspending call sites (UI stream resolve).
+     * Prefer DAO so membership is visible before StateFlow emits.
+     */
+    private fun findCatalogEpisodeBlocking(sourceId: String, remoteId: String): Episode? {
+        return runBlocking {
+            findCatalogEpisodeSuspend(sourceId, remoteId)
         }
     }
 
