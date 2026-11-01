@@ -1,11 +1,11 @@
 {
   "version": 1,
   "sourceId": "catalog:auralis",
-  "updatedAt": "2026-11-01T00:00:00Z",
+  "updatedAt": "2026-11-01T10:10:00Z",
   "podcasts": [
     {
       "id": "ai-philosophy",
-      "title": "فلسفه با هوش مصنوعی",
+      "title": "فلسفه با هوش مصنوعی (تست ریموت)",
       "description": "گفت‌وگوهای کوتاه تولیدشده با AI درباره معنا، اخلاق و آگاهی.",
       "coverUrl": null,
       "isAiGenerated": true,
