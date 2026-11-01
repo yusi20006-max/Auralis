@@ -87,7 +87,7 @@ class LibraryRepository internal constructor(
             it.sourceId == sourceId && it.remoteId == remoteId
         }
         if (existing != null) {
-            val privateUri = downloadStore.uriForRemoteId(remoteId)
+            val privateUri = downloadStore.uriForIdentity(sourceId, remoteId)
             if (privateUri != null && existing.localUri == null) {
                 scope.launch { dao.updateLocalUri(existing.id, privateUri.toString()) }
                 return existing.copy(localUri = privateUri, audioUrl = resolvedUrl)
@@ -95,7 +95,7 @@ class LibraryRepository internal constructor(
             return existing.copy(audioUrl = resolvedUrl)
         }
 
-        val privateUri = downloadStore.uriForRemoteId(remoteId)
+        val privateUri = downloadStore.uriForIdentity(sourceId, remoteId)
         return Episode(
             id = UUID.randomUUID().toString(),
             title = catalogEpisode.title,
@@ -122,7 +122,7 @@ class LibraryRepository internal constructor(
             return@withContext existing.copy(audioUrl = resolvedUrl)
         }
 
-        val privateUri = downloadStore.uriForRemoteId(remoteId)
+        val privateUri = downloadStore.uriForIdentity(sourceId, remoteId)
         val episode = Episode(
             id = UUID.randomUUID().toString(),
             title = catalogEpisode.title,
@@ -139,10 +139,11 @@ class LibraryRepository internal constructor(
         episode
     }
 
-    fun isDownloaded(remoteId: String): Boolean = downloadStore.hasLocalCopy(remoteId)
+    fun isDownloaded(remoteId: String): Boolean =
+        downloadStore.hasLocalCopy(CatalogConfig.SOURCE_ID, remoteId)
 
     fun cancelDownload(remoteId: String) {
-        downloadStore.cancel(remoteId)
+        downloadStore.cancel(CatalogConfig.SOURCE_ID, remoteId)
     }
 
     fun clearDownloadError() {
@@ -153,6 +154,7 @@ class LibraryRepository internal constructor(
         catalogEpisode: CatalogEpisode,
         podcast: CatalogPodcast?,
     ): Episode? = withContext(Dispatchers.IO) {
+        val sourceId = CatalogConfig.SOURCE_ID
         val remoteId = catalogEpisode.id
         val url = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
         if (url.isBlank()) {
@@ -166,8 +168,8 @@ class LibraryRepository internal constructor(
 
         val mutex = downloadMutexes.getOrPut(remoteId) { Mutex() }
         mutex.withLock {
-            if (downloadStore.hasLocalCopy(remoteId)) {
-                val uri = downloadStore.uriForRemoteId(remoteId)!!
+            if (downloadStore.hasLocalCopy(sourceId, remoteId)) {
+                val uri = downloadStore.uriForIdentity(sourceId, remoteId)!!
                 return@withLock upsertDownloaded(catalogEpisode, podcast, url, uri)
             }
 
@@ -175,7 +177,7 @@ class LibraryRepository internal constructor(
             _downloadingRemoteIds.value = _downloadingRemoteIds.value + remoteId
             _downloadProgress.value = _downloadProgress.value + (remoteId to 0f)
             try {
-                val fileUri = downloadStore.download(remoteId, url) { p ->
+                val fileUri = downloadStore.download(sourceId, remoteId, url) { p ->
                     _downloadProgress.value = _downloadProgress.value + (remoteId to p)
                 }
                 upsertDownloaded(catalogEpisode, podcast, url, fileUri)
@@ -242,7 +244,9 @@ class LibraryRepository internal constructor(
     fun deleteEpisode(episodeId: String) {
         scope.launch {
             val entity = dao.getById(episodeId)
-            entity?.remoteId?.let { downloadStore.delete(it) }
+            entity?.remoteId?.let { remoteId ->
+                downloadStore.delete(entity.sourceId, remoteId)
+            }
             dao.delete(episodeId)
             if (_currentEpisodeId.value == episodeId) {
                 _currentEpisodeId.value = null
