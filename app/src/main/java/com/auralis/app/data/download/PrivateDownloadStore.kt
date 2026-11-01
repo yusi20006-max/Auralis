@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class PrivateDownloadStore(private val context: Context) : DownloadStore {
 
     private val root: File = File(context.filesDir, DIR_NAME).also { it.mkdirs() }
-    private val cancelFlags = ConcurrentHashMap<String, AtomicBoolean>()
+    private val cancelFlags = ConcurrentHashMap<DownloadIdentity, AtomicBoolean>()
 
     fun storageKey(sourceId: String?, remoteId: String): String {
         val sid = sourceId?.trim().orEmpty()
@@ -71,11 +71,12 @@ class PrivateDownloadStore(private val context: Context) : DownloadStore {
         delete(sourceId = null, remoteId = remoteId)
 
     fun delete(sourceId: String?, remoteId: String) {
+        val identity = DownloadIdentity(sourceId, remoteId)
         val key = storageKey(sourceId, remoteId)
-        cancel(sourceId, remoteId)
+        cancel(identity)
         fileForKey(key).delete()
         File(root, opaqueName(key) + ".part").delete()
-        cancelFlags.remove(key)
+        cancelFlags.remove(identity)
         // A source-aware delete must never remove a remoteId-only legacy file:
         // its source ownership is unknown and it may belong to another source.
     }
@@ -92,8 +93,9 @@ class PrivateDownloadStore(private val context: Context) : DownloadStore {
 
     fun deleteExact(sourceId: String, remoteId: String): Boolean {
         require(sourceId.isNotBlank()) { "A source identity is required for exact deletion" }
+        val identity = DownloadIdentity(sourceId, remoteId)
         val key = storageKey(sourceId, remoteId)
-        cancelFlags.getOrPut(key) { AtomicBoolean(false) }.set(true)
+        cancel(identity)
 
         val partial = File(root, opaqueName(key) + ".part")
         if (partial.exists() && !partial.delete()) return false
@@ -101,7 +103,7 @@ class PrivateDownloadStore(private val context: Context) : DownloadStore {
         val target = fileForKey(key)
         if (target.exists() && !target.delete()) return false
 
-        cancelFlags.remove(key)
+        cancelFlags.remove(identity)
         return !target.exists() && !partial.exists()
     }
 
@@ -112,15 +114,17 @@ class PrivateDownloadStore(private val context: Context) : DownloadStore {
         cancel(identity.sourceId, identity.remoteId)
 
     fun cancel(sourceId: String?, remoteId: String) {
-        val key = storageKey(sourceId, remoteId)
-        cancelFlags.getOrPut(key) { AtomicBoolean(false) }.set(true)
+        val identity = DownloadIdentity(sourceId, remoteId)
+        synchronized(cancelFlags) {
+            cancelFlags.getOrPut(identity) { AtomicBoolean(false) }.set(true)
+        }
     }
 
     fun clearCancel(remoteId: String) =
         clearCancel(sourceId = null, remoteId = remoteId)
 
     fun clearCancel(sourceId: String?, remoteId: String) {
-        cancelFlags[storageKey(sourceId, remoteId)]?.set(false)
+        cancelFlags[DownloadIdentity(sourceId, remoteId)]?.set(false)
     }
 
     fun availableBytes(): Long = try {
@@ -151,10 +155,11 @@ class PrivateDownloadStore(private val context: Context) : DownloadStore {
             "Only http(s) URLs are supported"
         }
 
+        val identity = DownloadIdentity(sourceId, remoteId)
         val key = storageKey(sourceId, remoteId)
-        clearCancel(sourceId, remoteId)
-        val flag = cancelFlags.getOrPut(key) { AtomicBoolean(false) }
-        flag.set(false)
+        val flag = synchronized(cancelFlags) {
+            cancelFlags.getOrPut(identity) { AtomicBoolean(false) }
+        }
 
         val free = availableBytes()
         if (free < MIN_FREE_BYTES) {
@@ -233,7 +238,7 @@ class PrivateDownloadStore(private val context: Context) : DownloadStore {
             throw e
         } finally {
             connection.disconnect()
-            cancelFlags.remove(key)
+            cancelFlags.remove(identity, flag)
         }
     }
 
