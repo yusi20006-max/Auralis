@@ -25,6 +25,8 @@ data class Episode(
      * episodes and legacy rows whose source cannot be established safely.
      */
     val sourceId: String? = null,
+    /** Whether this episode has explicit, durable Library membership. */
+    val isInLibrary: Boolean = true,
 ) {
     val hasLocalSource: Boolean get() = localUri != null
     val progressFraction: Float
