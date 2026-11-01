@@ -24,8 +24,8 @@ android {
         applicationId = "com.auralis.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.2.1"
         vectorDrawables.useSupportLibrary = true
     }
     signingConfigs {
@@ -44,7 +44,6 @@ android {
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
-                // Internal test builds: fall back to debug signing so CI can produce a signed APK.
                 signingConfigs.getByName("debug")
             }
         }
