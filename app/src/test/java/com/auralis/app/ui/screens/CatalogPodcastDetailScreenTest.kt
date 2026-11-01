@@ -34,6 +34,7 @@ class CatalogPodcastDetailScreenTest {
         val libraryMembership = mutableStateOf(emptySet<DownloadIdentity>())
         val playCalls = AtomicInteger()
         val downloadCalls = AtomicInteger()
+        val addCalls = AtomicInteger()
 
         composeRule.setContent {
             CatalogPodcastDetailScreen(
@@ -42,7 +43,10 @@ class CatalogPodcastDetailScreenTest {
                 libraryIdentities = libraryMembership.value,
                 isDownloaded = { false },
                 loadState = CatalogLoadState.Idle,
-                onAddToLibrary = { libraryMembership.value = libraryMembership.value + identity },
+                onAddToLibrary = {
+                    addCalls.incrementAndGet()
+                    libraryMembership.value = libraryMembership.value + identity
+                },
                 onRemoveFromLibrary = { libraryMembership.value = libraryMembership.value - identity },
                 onPlayEpisode = { playCalls.incrementAndGet() },
                 onDownloadEpisode = { downloadCalls.incrementAndGet() },
@@ -63,13 +67,15 @@ class CatalogPodcastDetailScreenTest {
             .performClick()
         composeRule.runOnIdle {
             assertEquals(1, downloadCalls.get())
-            assertTrue("Download action is separately exposed from Add to Library", libraryMembership.value.isEmpty())
+            assertEquals("Download must not dispatch the Add action handler", 0, addCalls.get())
+            assertTrue(libraryMembership.value.isEmpty())
         }
 
         composeRule.onNodeWithContentDescription("افزودن " + episode.title + " به کتابخانه")
             .assertExists()
             .performClick()
         composeRule.waitUntil(5_000) { libraryMembership.value.contains(identity) }
+        composeRule.runOnIdle { assertEquals(1, addCalls.get()) }
         composeRule.onNodeWithContentDescription("حذف عضویت " + episode.title + " از کتابخانه")
             .assertExists()
             .performClick()
