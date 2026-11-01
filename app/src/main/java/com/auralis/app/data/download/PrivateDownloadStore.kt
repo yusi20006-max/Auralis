@@ -95,8 +95,8 @@ class PrivateDownloadStore(private val context: Context) : DownloadStore {
         require(sourceId.isNotBlank()) { "A source identity is required for exact deletion" }
         val identity = DownloadIdentity(sourceId, remoteId)
         val key = storageKey(sourceId, remoteId)
-        cancel(identity)
-
+        // LibraryRepository serializes this operation with the identity's download mutex.
+        // Do not leave a cancellation flag behind when deleting an already-idle identity.
         val partial = File(root, opaqueName(key) + ".part")
         if (partial.exists() && !partial.delete()) return false
 
