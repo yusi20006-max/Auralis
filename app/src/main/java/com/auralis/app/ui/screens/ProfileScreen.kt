@@ -23,6 +23,8 @@ import com.auralis.app.ui.theme.AuralisTypeScale
 @Composable
 fun ProfileScreen(
     episodeCount: Int,
+    versionName: String,
+    versionCode: Int,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -41,7 +43,6 @@ fun ProfileScreen(
             modifier = Modifier.padding(vertical = AuralisSpacing.X4),
         )
 
-        // Avatar + name
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -64,7 +65,7 @@ fun ProfileScreen(
                     fontWeight = FontWeight.Bold,
                 )
             }
-            Spacer(Modifier.height(AuralisSpacing.X3))
+            Spacer(modifier = Modifier.height(AuralisSpacing.X3))
             Text(
                 text = "شنونده Auralis",
                 color = AuralisColors.TextPrimary,
@@ -78,9 +79,8 @@ fun ProfileScreen(
             )
         }
 
-        Spacer(Modifier.height(AuralisSpacing.X6))
+        Spacer(modifier = Modifier.height(AuralisSpacing.X6))
 
-        // Stats
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(AuralisSpacing.X3),
@@ -90,7 +90,7 @@ fun ProfileScreen(
             StatCard(modifier = Modifier.weight(1f), value = "AI", label = "محتوا")
         }
 
-        Spacer(Modifier.height(AuralisSpacing.X6))
+        Spacer(modifier = Modifier.height(AuralisSpacing.X6))
 
         Text(
             text = "کتابخانه من",
@@ -98,13 +98,13 @@ fun ProfileScreen(
             fontSize = AuralisTypeScale.BodyLarge,
             fontWeight = FontWeight.SemiBold,
         )
-        Spacer(Modifier.height(AuralisSpacing.X3))
+        Spacer(modifier = Modifier.height(AuralisSpacing.X3))
 
         ProfileRow(title = "علاقه‌مندی‌ها", subtitle = "به زودی")
         ProfileRow(title = "دانلودها", subtitle = "به زودی")
         ProfileRow(title = "تاریخچه گوش دادن", subtitle = "$episodeCount قسمت")
 
-        Spacer(Modifier.height(AuralisSpacing.X6))
+        Spacer(modifier = Modifier.height(AuralisSpacing.X6))
 
         Text(
             text = "تنظیمات",
@@ -112,7 +112,7 @@ fun ProfileScreen(
             fontSize = AuralisTypeScale.BodyLarge,
             fontWeight = FontWeight.SemiBold,
         )
-        Spacer(Modifier.height(AuralisSpacing.X3))
+        Spacer(modifier = Modifier.height(AuralisSpacing.X3))
 
         ProfileRow(
             title = "تنظیمات پخش و ظاهر",
@@ -120,15 +120,49 @@ fun ProfileScreen(
             onClick = onOpenSettings,
         )
 
-        Spacer(Modifier.height(AuralisSpacing.X8))
+        Spacer(modifier = Modifier.height(AuralisSpacing.X6))
 
         Text(
-            text = "Auralis · نسخه ۰.۱.۰",
-            color = AuralisColors.TextTertiary,
-            fontSize = AuralisTypeScale.Caption,
-            modifier = Modifier.align(Alignment.CenterHorizontally),
+            text = "درباره",
+            color = AuralisColors.TextPrimary,
+            fontSize = AuralisTypeScale.BodyLarge,
+            fontWeight = FontWeight.SemiBold,
         )
-        Spacer(Modifier.height(AuralisSpacing.X8))
+        Spacer(modifier = Modifier.height(AuralisSpacing.X3))
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = AuralisColors.Surface,
+            shape = RoundedCornerShape(AuralisCorners.Card),
+        ) {
+            Column(modifier = Modifier.padding(AuralisSpacing.X4)) {
+                Text(
+                    text = "Auralis",
+                    color = AuralisColors.TextPrimary,
+                    fontSize = AuralisTypeScale.BodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "نسخه $versionName  ·  build $versionCode",
+                    color = AuralisColors.PrimaryBlue,
+                    fontSize = AuralisTypeScale.BodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(modifier = Modifier.height(AuralisSpacing.X2))
+                Text(
+                    text = "پخش‌کننده آفلاین پادکست‌های هوش مصنوعی",
+                    color = AuralisColors.TextSecondary,
+                    fontSize = AuralisTypeScale.Caption,
+                )
+                Text(
+                    text = "هویت منبع‌آگاه · دانلود خصوصی · پخش offline-first",
+                    color = AuralisColors.TextTertiary,
+                    fontSize = AuralisTypeScale.Caption,
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(AuralisSpacing.X8))
     }
 }
 

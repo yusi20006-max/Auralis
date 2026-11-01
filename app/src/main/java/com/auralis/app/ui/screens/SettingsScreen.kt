@@ -21,6 +21,8 @@ fun SettingsScreen(
     playbackSpeed: Float,
     onSpeedChange: (Float) -> Unit,
     onBack: () -> Unit,
+    versionName: String,
+    versionCode: Int,
     modifier: Modifier = Modifier,
 ) {
     var notificationsEnabled by remember { mutableStateOf(true) }
@@ -42,20 +44,20 @@ fun SettingsScreen(
             TextButton(onClick = onBack) {
                 Text("بازگشت", color = AuralisColors.TextSecondary)
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = "تنظیمات",
                 color = AuralisColors.TextPrimary,
                 fontSize = AuralisTypeScale.TitleMediumMax,
                 fontWeight = FontWeight.SemiBold,
             )
-            Spacer(Modifier.weight(1f))
-            Spacer(Modifier.width(64.dp))
+            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(64.dp))
         }
 
         SectionTitle("پخش")
         SettingsCard {
-            Column(Modifier.padding(AuralisSpacing.X4)) {
+            Column(modifier = Modifier.padding(AuralisSpacing.X4)) {
                 Text(
                     text = "سرعت پخش",
                     color = AuralisColors.TextPrimary,
@@ -104,10 +106,15 @@ fun SettingsScreen(
 
         SectionTitle("درباره")
         SettingsCard {
-            Column(Modifier.padding(AuralisSpacing.X4)) {
+            Column(modifier = Modifier.padding(AuralisSpacing.X4)) {
                 Text("Auralis", color = AuralisColors.TextPrimary, fontWeight = FontWeight.SemiBold)
-                Text("نسخه ۰.۱.۰", color = AuralisColors.TextSecondary, fontSize = AuralisTypeScale.Caption)
-                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "نسخه $versionName  ·  build $versionCode",
+                    color = AuralisColors.PrimaryBlue,
+                    fontSize = AuralisTypeScale.BodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "پخش‌کننده آفلاین پادکست‌های هوش مصنوعی",
                     color = AuralisColors.TextTertiary,
@@ -116,7 +123,7 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(Modifier.height(AuralisSpacing.X8))
+        Spacer(modifier = Modifier.height(AuralisSpacing.X8))
     }
 }
 
