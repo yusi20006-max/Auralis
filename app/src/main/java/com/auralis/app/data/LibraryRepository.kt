@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -80,8 +79,9 @@ class LibraryRepository internal constructor(
     /**
      * Resolve an Episode for playback from the hosted catalog.
      *
-     * - If a durable library row already exists for (SOURCE_ID, remoteId),
-     *   return it (and refresh audioUrl / attach private download URI when present).
+     * - If a durable library row already exists for (SOURCE_ID, remoteId)
+     *   in the observed library snapshot, return it (and refresh audioUrl /
+     *   attach private download URI when present).
      * - Otherwise return an in-memory Episode suitable for streaming.
      *   Play alone does **not** write a permanent Room membership.
      *
@@ -98,7 +98,9 @@ class LibraryRepository internal constructor(
         val remoteId = catalogEpisode.id
         val resolvedUrl = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
 
-        val existing = findCatalogEpisodeBlocking(sourceId, remoteId)
+        val existing = episodes.value.find {
+            it.sourceId == sourceId && it.remoteId == remoteId
+        }
         if (existing != null) {
             val privateUri = downloadStore.uriForRemoteId(remoteId)
             if (privateUri != null && existing.localUri == null) {
@@ -257,16 +259,6 @@ class LibraryRepository internal constructor(
         dao.getBySourceAndRemoteId(sourceId, remoteId)?.toEpisode()?.let { return it }
         return episodes.value.find {
             it.sourceId == sourceId && it.remoteId == remoteId
-        }
-    }
-
-    /**
-     * Blocking composite lookup for non-suspending call sites (UI stream resolve).
-     * Prefer DAO so membership is visible before StateFlow emits.
-     */
-    private fun findCatalogEpisodeBlocking(sourceId: String, remoteId: String): Episode? {
-        return runBlocking {
-            findCatalogEpisodeSuspend(sourceId, remoteId)
         }
     }
 
