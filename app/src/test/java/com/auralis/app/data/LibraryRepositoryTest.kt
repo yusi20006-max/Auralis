@@ -150,6 +150,7 @@ class LibraryRepositoryTest {
         assertTrue("removing Library membership must preserve the offline file", file.isFile)
         assertTrue(file.length() > 64L)
         file.delete()
+        Unit
     }
 
     @Test
