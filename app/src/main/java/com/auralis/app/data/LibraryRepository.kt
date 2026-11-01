@@ -303,10 +303,21 @@ class LibraryRepository internal constructor(
 
     fun deleteEpisode(episodeId: String) {
         scope.launch {
-            // Library removal is a membership change, not deletion of episode metadata
-            // or the independently owned private download.
-            dao.getById(episodeId)?.let { existing ->
-                if (existing.isInLibrary) dao.upsert(existing.copy(isInLibrary = false))
+            // Serialize membership removal with download/retry/delete for the same
+            // source identity so a stale row cannot overwrite a newly stored file URI.
+            val initial = dao.getById(episodeId) ?: return@launch
+            val sourceId = initial.sourceId?.takeIf { it.isNotBlank() }
+            val remoteId = initial.remoteId?.takeIf { it.isNotBlank() }
+            if (sourceId != null && remoteId != null) {
+                val identity = DownloadIdentity(sourceId, remoteId)
+                val mutex = downloadMutexes.getOrPut(identity) { Mutex() }
+                mutex.withLock {
+                    dao.getById(episodeId)?.let { current ->
+                        if (current.isInLibrary) dao.upsert(current.copy(isInLibrary = false))
+                    }
+                }
+            } else if (initial.isInLibrary) {
+                dao.upsert(initial.copy(isInLibrary = false))
             }
         }
     }
