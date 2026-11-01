@@ -9,6 +9,8 @@ import com.auralis.app.data.db.AuralisDatabase
 import com.auralis.app.data.db.EpisodeDao
 import com.auralis.app.data.db.EpisodeEntity
 import com.auralis.app.data.download.DownloadCancelledException
+import com.auralis.app.data.download.DownloadIdentity
+import com.auralis.app.data.download.DownloadStore
 import com.auralis.app.data.download.InsufficientSpaceException
 import com.auralis.app.data.download.PrivateDownloadStore
 import kotlinx.coroutines.CoroutineScope
@@ -20,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -29,7 +32,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 class LibraryRepository internal constructor(
     private val dao: EpisodeDao,
-    private val downloadStore: PrivateDownloadStore,
+    private val downloadStore: DownloadStore,
     private val scope: CoroutineScope,
 ) {
     constructor(context: Context) : this(
@@ -45,16 +48,22 @@ class LibraryRepository internal constructor(
     private val _currentEpisodeId = MutableStateFlow<String?>(null)
     val currentEpisodeId: StateFlow<String?> = _currentEpisodeId.asStateFlow()
 
-    private val _downloadingRemoteIds = MutableStateFlow<Set<String>>(emptySet())
-    val downloadingRemoteIds: StateFlow<Set<String>> = _downloadingRemoteIds.asStateFlow()
+    private val _downloadingIdentities = MutableStateFlow<Set<DownloadIdentity>>(emptySet())
+    val downloadingIdentities: StateFlow<Set<DownloadIdentity>> = _downloadingIdentities.asStateFlow()
 
-    private val _downloadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
-    val downloadProgress: StateFlow<Map<String, Float>> = _downloadProgress.asStateFlow()
+    private val _downloadProgress = MutableStateFlow<Map<DownloadIdentity, Float>>(emptyMap())
+    val downloadProgress: StateFlow<Map<DownloadIdentity, Float>> = _downloadProgress.asStateFlow()
 
-    private val _lastDownloadError = MutableStateFlow<String?>(null)
-    val lastDownloadError: StateFlow<String?> = _lastDownloadError.asStateFlow()
+    private val _downloadErrors = MutableStateFlow<Map<DownloadIdentity, String>>(emptyMap())
+    val downloadErrors: StateFlow<Map<DownloadIdentity, String>> = _downloadErrors.asStateFlow()
 
-    private val downloadMutexes = ConcurrentHashMap<String, Mutex>()
+    /** Compatibility summary for the existing app-wide error banner. */
+    val lastDownloadError: StateFlow<String?> = _downloadErrors
+        .map { errors -> errors.values.lastOrNull() }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    // A single identity serializes its own requests; different sources never share a lock.
+    private val downloadMutexes = ConcurrentHashMap<DownloadIdentity, Mutex>()
 
     suspend fun addLocalEpisode(
         uri: Uri,
@@ -87,7 +96,7 @@ class LibraryRepository internal constructor(
             it.sourceId == sourceId && it.remoteId == remoteId
         }
         if (existing != null) {
-            val privateUri = downloadStore.uriForIdentity(sourceId, remoteId)
+            val privateUri = downloadStore.uriForIdentity(DownloadIdentity(sourceId, remoteId))
             if (privateUri != null && existing.localUri == null) {
                 scope.launch { dao.updateLocalUri(existing.id, privateUri.toString()) }
                 return existing.copy(localUri = privateUri, audioUrl = resolvedUrl)
@@ -95,7 +104,7 @@ class LibraryRepository internal constructor(
             return existing.copy(audioUrl = resolvedUrl)
         }
 
-        val privateUri = downloadStore.uriForIdentity(sourceId, remoteId)
+        val privateUri = downloadStore.uriForIdentity(DownloadIdentity(sourceId, remoteId))
         return Episode(
             id = UUID.randomUUID().toString(),
             title = catalogEpisode.title,
@@ -122,7 +131,7 @@ class LibraryRepository internal constructor(
             return@withContext existing.copy(audioUrl = resolvedUrl)
         }
 
-        val privateUri = downloadStore.uriForIdentity(sourceId, remoteId)
+        val privateUri = downloadStore.uriForIdentity(DownloadIdentity(sourceId, remoteId))
         val episode = Episode(
             id = UUID.randomUUID().toString(),
             title = catalogEpisode.title,
@@ -139,60 +148,78 @@ class LibraryRepository internal constructor(
         episode
     }
 
-    fun isDownloaded(remoteId: String): Boolean =
-        downloadStore.hasLocalCopy(CatalogConfig.SOURCE_ID, remoteId)
+    fun isDownloaded(identity: DownloadIdentity): Boolean =
+        downloadStore.hasLocalCopy(identity)
 
-    fun cancelDownload(remoteId: String) {
-        downloadStore.cancel(CatalogConfig.SOURCE_ID, remoteId)
+    fun cancelDownload(identity: DownloadIdentity) {
+        downloadStore.cancel(identity)
     }
 
-    fun clearDownloadError() {
-        _lastDownloadError.value = null
+    fun clearDownloadError(identity: DownloadIdentity? = null) {
+        _downloadErrors.update { errors -> if (identity == null) emptyMap() else errors - identity }
     }
 
     suspend fun downloadEpisodeOffline(
         catalogEpisode: CatalogEpisode,
         podcast: CatalogPodcast?,
+    ): Episode? = downloadEpisodeOffline(
+        DownloadIdentity(CatalogConfig.SOURCE_ID, catalogEpisode.id),
+        catalogEpisode,
+        podcast,
+    )
+
+    /** Downloads one remote episode under its explicit source identity. */
+    suspend fun downloadEpisodeOffline(
+        identity: DownloadIdentity,
+        catalogEpisode: CatalogEpisode,
+        podcast: CatalogPodcast?,
     ): Episode? = withContext(Dispatchers.IO) {
-        val sourceId = CatalogConfig.SOURCE_ID
-        val remoteId = catalogEpisode.id
+        require(identity.remoteId == catalogEpisode.id) {
+            "Download identity remoteId must match the catalog episode"
+        }
+        if (!identity.isSourceAware) {
+            _downloadErrors.update { it +
+                (identity to "منبع دانلود مشخص نیست؛ فایل Legacy به‌صورت خودکار ساخته نمی‌شود.") }
+            return@withContext null
+        }
         val url = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
         if (url.isBlank()) {
-            _lastDownloadError.value = "آدرس فایل خالی است."
+            _downloadErrors.update { it + (identity to "آدرس فایل خالی است.") }
             return@withContext null
         }
 
-        if (remoteId in _downloadingRemoteIds.value) {
-            return@withContext null
-        }
-
-        val mutex = downloadMutexes.getOrPut(remoteId) { Mutex() }
+        val mutex = downloadMutexes.getOrPut(identity) { Mutex() }
         mutex.withLock {
-            if (downloadStore.hasLocalCopy(sourceId, remoteId)) {
-                val uri = downloadStore.uriForIdentity(sourceId, remoteId)!!
-                return@withLock upsertDownloaded(catalogEpisode, podcast, url, uri)
+            // Re-check after acquiring the identity lock: concurrent duplicate requests
+            // converge on the first completed file and never download/write it twice.
+            if (downloadStore.hasLocalCopy(identity)) {
+                val uri = downloadStore.uriForIdentity(identity)
+                    ?: return@withLock null
+                return@withLock upsertDownloaded(catalogEpisode, podcast, url, uri, identity)
             }
 
-            _lastDownloadError.value = null
-            _downloadingRemoteIds.value = _downloadingRemoteIds.value + remoteId
-            _downloadProgress.value = _downloadProgress.value + (remoteId to 0f)
+            _downloadErrors.update { it - identity }
+            _downloadingIdentities.update { it + identity }
+            _downloadProgress.update { it + (identity to 0f) }
             try {
-                val fileUri = downloadStore.download(sourceId, remoteId, url) { p ->
-                    _downloadProgress.value = _downloadProgress.value + (remoteId to p)
+                val fileUri = downloadStore.download(identity, url) { progress ->
+                    _downloadProgress.update { it + (identity to progress) }
                 }
-                upsertDownloaded(catalogEpisode, podcast, url, fileUri)
+                upsertDownloaded(catalogEpisode, podcast, url, fileUri, identity)
             } catch (_: DownloadCancelledException) {
-                _lastDownloadError.value = null
+                _downloadErrors.update { it - identity }
                 null
             } catch (_: InsufficientSpaceException) {
-                _lastDownloadError.value = "فضای ذخیره‌سازی کافی نیست."
+                _downloadErrors.update { it +
+                    (identity to "فضای ذخیره‌سازی کافی نیست.") }
                 null
             } catch (_: Exception) {
-                _lastDownloadError.value = "دانلود انجام نشد. اتصال را بررسی کنید و دوباره تلاش کنید."
+                _downloadErrors.update { it +
+                    (identity to "دانلود انجام نشد. اتصال را بررسی کنید و دوباره تلاش کنید.") }
                 null
             } finally {
-                _downloadingRemoteIds.value = _downloadingRemoteIds.value - remoteId
-                _downloadProgress.value = _downloadProgress.value - remoteId
+                _downloadingIdentities.update { it - identity }
+                _downloadProgress.update { it - identity }
             }
         }
     }
@@ -202,9 +229,10 @@ class LibraryRepository internal constructor(
         podcast: CatalogPodcast?,
         url: String,
         fileUri: Uri,
+        identity: DownloadIdentity,
     ): Episode {
-        val sourceId = CatalogConfig.SOURCE_ID
-        val remoteId = catalogEpisode.id
+        val sourceId = identity.sourceId!!
+        val remoteId = identity.remoteId
 
         val existing = findCatalogEpisodeSuspend(sourceId, remoteId)
         if (existing != null) {
@@ -263,10 +291,17 @@ class LibraryRepository internal constructor(
             val sourceId = entity.sourceId?.takeIf { it.isNotBlank() } ?: return@launch
             val remoteId = entity.remoteId?.takeIf { it.isNotBlank() } ?: return@launch
 
-            // Null-source rows address ambiguous legacy storage; never delete those files.
-            // Keep the database URI unless the exact source-owned file is removed.
-            if (downloadStore.deleteExact(sourceId, remoteId)) {
-                dao.updateLocalUri(episodeId, null)
+            // Serialize explicit deletion with download/retry for the same identity.
+            // This prevents deletion from clearing a live cancellation flag or racing
+            // the final .part -> target rename.
+            val identity = DownloadIdentity(sourceId, remoteId)
+            val mutex = downloadMutexes.getOrPut(identity) { Mutex() }
+            mutex.withLock {
+                // Null-source rows address ambiguous legacy storage; never delete those files.
+                // Keep the database URI unless the exact source-owned file is removed.
+                if (downloadStore.deleteExact(identity)) {
+                    dao.updateLocalUri(episodeId, null)
+                }
             }
         }
     }
@@ -274,7 +309,7 @@ class LibraryRepository internal constructor(
     /** Source-aware private download URI when a file exists for this episode identity. */
     fun privateDownloadUri(episode: Episode): Uri? {
         val remoteId = episode.remoteId?.takeIf { it.isNotBlank() } ?: return null
-        return downloadStore.uriForIdentity(episode.sourceId, remoteId)
+        return downloadStore.uriForIdentity(DownloadIdentity(episode.sourceId, remoteId))
     }
 
     fun setCurrentEpisode(id: String?) {

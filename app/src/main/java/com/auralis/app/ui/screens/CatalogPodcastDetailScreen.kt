@@ -32,6 +32,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.auralis.app.data.catalog.CatalogConfig
+import com.auralis.app.data.download.DownloadIdentity
 import com.auralis.app.data.catalog.CatalogEpisode
 import com.auralis.app.data.catalog.CatalogPodcast
 import com.auralis.app.data.catalog.CatalogRepository
@@ -44,9 +46,9 @@ import com.auralis.app.ui.theme.AuralisTypeScale
 fun CatalogPodcastDetailScreen(
     podcast: CatalogPodcast,
     catalogRepository: CatalogRepository,
-    downloadedRemoteIds: Set<String> = emptySet(),
-    downloadingRemoteIds: Set<String> = emptySet(),
-    downloadProgress: Map<String, Float> = emptyMap(),
+    downloadedIdentities: Set<DownloadIdentity> = emptySet(),
+    downloadingIdentities: Set<DownloadIdentity> = emptySet(),
+    downloadProgress: Map<DownloadIdentity, Float> = emptyMap(),
     onBack: () -> Unit,
     onPlayEpisode: (CatalogEpisode) -> Unit = {},
     onDownloadEpisode: (CatalogEpisode) -> Unit = {},
@@ -135,11 +137,12 @@ fun CatalogPodcastDetailScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
             items(episodes, key = { it.id }) { episode ->
+                val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, episode.id)
                 EpisodeRow(
                     episode = episode,
-                    isDownloaded = downloadedRemoteIds.contains(episode.id),
-                    isDownloading = downloadingRemoteIds.contains(episode.id),
-                    progress = downloadProgress[episode.id],
+                    isDownloaded = downloadedIdentities.contains(identity),
+                    isDownloading = downloadingIdentities.contains(identity),
+                    progress = downloadProgress[identity],
                     onPlay = { onPlayEpisode(episode) },
                     onDownload = { onDownloadEpisode(episode) },
                     onCancel = { onCancelDownload(episode) },

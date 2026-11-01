@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.auralis.app.data.download.DownloadIdentity
 import com.auralis.app.data.catalog.CatalogEpisode
 import com.auralis.app.data.catalog.CatalogPodcast
 import com.auralis.app.data.catalog.CatalogRepository
@@ -54,9 +55,9 @@ fun ExploreScreen(
     onStreamEpisode: (CatalogPodcast, CatalogEpisode) -> Unit = { _, _ -> },
     onDownloadEpisode: (CatalogPodcast, CatalogEpisode) -> Unit = { _, _ -> },
     onCancelDownload: (CatalogPodcast, CatalogEpisode) -> Unit = { _, _ -> },
-    downloadedRemoteIds: Set<String> = emptySet(),
-    downloadingRemoteIds: Set<String> = emptySet(),
-    downloadProgress: Map<String, Float> = emptyMap(),
+    downloadedIdentities: Set<DownloadIdentity> = emptySet(),
+    downloadingIdentities: Set<DownloadIdentity> = emptySet(),
+    downloadProgress: Map<DownloadIdentity, Float> = emptyMap(),
     catalogRepository: CatalogRepository = remember { CatalogRepository() },
     modifier: Modifier = Modifier,
 ) {
@@ -76,8 +77,8 @@ fun ExploreScreen(
         CatalogPodcastDetailScreen(
             podcast = podcast,
             catalogRepository = catalogRepository,
-            downloadedRemoteIds = downloadedRemoteIds,
-            downloadingRemoteIds = downloadingRemoteIds,
+            downloadedIdentities = downloadedIdentities,
+            downloadingIdentities = downloadingIdentities,
             downloadProgress = downloadProgress,
             onBack = { selectedPodcast = null },
             onPlayEpisode = { episode -> onStreamEpisode(podcast, episode) },

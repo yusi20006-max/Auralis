@@ -41,6 +41,8 @@ import androidx.media3.session.SessionToken
 import com.auralis.app.BuildConfig
 import com.auralis.app.data.Episode
 import com.auralis.app.data.LibraryRepository
+import com.auralis.app.data.catalog.CatalogConfig
+import com.auralis.app.data.download.DownloadIdentity
 import com.auralis.app.data.LocalUriAccess
 import com.auralis.app.data.PlaybackPreferences
 import com.auralis.app.playback.PlaybackErrorMapper
@@ -309,12 +311,15 @@ class MainActivity : ComponentActivity() {
                 val currentEpisodeId by libraryRepository.currentEpisodeId.collectAsState()
                 val currentEpisode = episodes.find { it.id == currentEpisodeId }
                 val playbackSpeed by playbackPreferences.speed.collectAsState()
-                val downloadingRemoteIds by libraryRepository.downloadingRemoteIds.collectAsState()
+                val downloadingIdentities by libraryRepository.downloadingIdentities.collectAsState()
                 val downloadProgress by libraryRepository.downloadProgress.collectAsState()
                 val lastDownloadError by libraryRepository.lastDownloadError.collectAsState()
-                val downloadedRemoteIds = episodes.mapNotNull { ep ->
-                    ep.remoteId?.takeIf { libraryRepository.isDownloaded(it) }
+                val downloadedIdentities = episodes.mapNotNull { episode ->
+                    val remoteId = episode.remoteId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    DownloadIdentity(episode.sourceId, remoteId)
+                        .takeIf(libraryRepository::isDownloaded)
                 }.toSet()
+                val catalogSourceId = CatalogConfig.SOURCE_ID
 
                 BackHandler(enabled = showNowPlaying || showSettings) {
                     when {
@@ -482,8 +487,8 @@ class MainActivity : ComponentActivity() {
                                                     onImportClick = {
                                                         openAudio.launch(arrayOf("audio/*"))
                                                     },
-                                                    downloadedRemoteIds = downloadedRemoteIds,
-                                                    downloadingRemoteIds = downloadingRemoteIds,
+                                                    downloadedIdentities = downloadedIdentities,
+                                                    downloadingIdentities = downloadingIdentities,
                                                     downloadProgress = downloadProgress,
                                                     onStreamEpisode = { podcast, catalogEpisode ->
                                                         if (catalogEpisode.audioUrl.isBlank()) {
@@ -509,7 +514,7 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                     },
                                                     onCancelDownload = { _, catalogEpisode ->
-                                                        libraryRepository.cancelDownload(catalogEpisode.id)
+                                                        libraryRepository.cancelDownload(DownloadIdentity(catalogSourceId, catalogEpisode.id))
                                                     },
                                                 )
                                             }
