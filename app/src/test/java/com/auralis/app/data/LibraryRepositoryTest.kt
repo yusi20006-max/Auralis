@@ -400,4 +400,18 @@ class LibraryRepositoryTest {
         override fun deleteExact(identity: DownloadIdentity): Boolean = completed.remove(identity)
     }
 
+    @Test
+    fun sourceLessLegacyIdentityIsNotDownloadedOrAssignedToCatalogSource() = runBlocking {
+        val legacy = DownloadIdentity(null, sampleEpisode.id)
+        val store = RecordingDownloadStore()
+        val testRepository = LibraryRepository(database.episodeDao(), store, repositoryScope)
+
+        val result = testRepository.downloadEpisodeOffline(legacy, sampleEpisode, samplePodcast)
+
+        assertNull(result)
+        assertEquals(0, store.totalCalls.get())
+        assertTrue(testRepository.downloadErrors.value.containsKey(legacy))
+        assertTrue(testRepository.downloadingIdentities.value.isEmpty())
+    }
+
 }
