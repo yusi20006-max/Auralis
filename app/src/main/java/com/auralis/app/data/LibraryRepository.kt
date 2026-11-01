@@ -243,10 +243,8 @@ class LibraryRepository internal constructor(
 
     fun deleteEpisode(episodeId: String) {
         scope.launch {
-            val entity = dao.getById(episodeId)
-            entity?.remoteId?.let { remoteId ->
-                downloadStore.delete(entity.sourceId, remoteId)
-            }
+            // Removing Library membership must not delete the user's offline file.
+            // The private download remains addressable by its stable source identity.
             dao.delete(episodeId)
             if (_currentEpisodeId.value == episodeId) {
                 _currentEpisodeId.value = null
