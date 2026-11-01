@@ -68,6 +68,9 @@ class LibraryRepositoryTest {
         )
     }
 
+    private fun repositoryDownloadStoreFile(sourceId: String, remoteId: String) =
+        PrivateDownloadStore(context).fileForIdentity(sourceId, remoteId)
+
     @After
     fun tearDown() {
         repositoryScope.cancel()
@@ -121,6 +124,32 @@ class LibraryRepositoryTest {
         assertEquals(1, rows.size)
         assertTrue(results.all { it.localUri == uri })
         assertEquals(rows.single().id, results.first().id)
+    }
+
+    @Test
+    fun removingLibraryMembershipPreservesDownloadedFile() = runBlocking {
+        val remoteId = "preserve-download-${System.nanoTime()}"
+        val sourceId = CatalogConfig.SOURCE_ID
+        val file = repositoryDownloadStoreFile(sourceId, remoteId)
+        file.parentFile?.mkdirs()
+        file.writeBytes(ByteArray(128) { 5 })
+        val episodeId = "downloaded-row-${System.nanoTime()}"
+        database.episodeDao().upsert(
+            EpisodeEntity(
+                id = episodeId,
+                title = "Downloaded episode",
+                remoteId = remoteId,
+                sourceId = sourceId,
+                localUri = Uri.parse("content://test/downloaded").toString(),
+            ),
+        )
+
+        repository.deleteEpisode(episodeId)
+        database.episodeDao().observeAll().first { rows -> rows.none { it.id == episodeId } }
+
+        assertTrue("removing Library membership must preserve the offline file", file.isFile)
+        assertTrue(file.length() > 64L)
+        file.delete()
     }
 
     @Test
