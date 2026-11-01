@@ -155,7 +155,11 @@ class LibraryRepositoryTest {
         )
 
         repository.deleteEpisode(episodeId)
-        database.episodeDao().observeAll().first { rows -> rows.none { it.id == episodeId } }
+        val retainedRows = database.episodeDao().observeAll().first { rows ->
+            rows.any { it.id == episodeId && !it.isInLibrary }
+        }
+        assertEquals(1, retainedRows.size)
+        assertTrue(repository.libraryEpisodes.first { rows -> rows.none { it.id == episodeId } }.isEmpty())
 
         assertTrue("removing Library membership must preserve the offline file", file.isFile)
         assertTrue(file.length() > 64L)
@@ -230,13 +234,17 @@ class LibraryRepositoryTest {
 
         assertTrue(repository.removeFromLibrary(identity))
 
-        assertNull(database.episodeDao().getBySourceAndRemoteId(identity.sourceId, identity.remoteId))
+        val removed = database.episodeDao().getBySourceAndRemoteId(identity.sourceId, identity.remoteId)
+        assertNotNull(removed)
+        assertEquals(false, removed?.isInLibrary)
+        assertTrue(repository.libraryEpisodes.first { rows -> rows.none { it.remoteId == identity.remoteId } }.isEmpty())
         assertTrue("removing Library membership must not delete the private file", file.isFile)
         assertTrue(repository.isDownloaded(identity))
 
         val reAdded = repository.addToLibrary(sampleEpisode, samplePodcast)
         assertNotNull(reAdded.localUri)
-        assertNotNull(database.episodeDao().getBySourceAndRemoteId(identity.sourceId, identity.remoteId))
+        assertEquals(added.id, reAdded.id)
+        assertEquals(true, database.episodeDao().getBySourceAndRemoteId(identity.sourceId, identity.remoteId)?.isInLibrary)
         assertTrue("re-adding membership must reuse the existing private file", file.isFile)
         file.delete()
         Unit
@@ -268,7 +276,35 @@ class LibraryRepositoryTest {
         val row = database.episodeDao().getBySourceAndRemoteId(identity.sourceId!!, identity.remoteId)
         assertNotNull(row)
         assertNotNull(row?.localUri)
+        assertEquals(false, row?.isInLibrary)
+        assertTrue(testRepository.libraryEpisodes.first().isEmpty())
         assertEquals(1, database.episodeDao().observeAll().first().size)
+    }
+
+    @Test
+    fun downloadOnlyEpisodeCanBeAddedAndRemovedWithoutLosingItsFile() = runBlocking {
+        val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, sampleEpisode.id)
+        val store = RecordingDownloadStore()
+        val testRepository = LibraryRepository(database.episodeDao(), store, repositoryScope)
+
+        val downloaded = testRepository.downloadEpisodeOffline(identity, sampleEpisode, samplePodcast)
+        assertNotNull(downloaded)
+        assertEquals(false, database.episodeDao().getBySourceAndRemoteId(identity.sourceId!!, identity.remoteId)?.isInLibrary)
+        assertTrue(testRepository.libraryEpisodes.first().isEmpty())
+
+        val added = testRepository.addToLibrary(sampleEpisode, samplePodcast)
+        assertEquals(downloaded?.id, added.id)
+        assertEquals(true, added.isInLibrary)
+        assertEquals(1, testRepository.libraryEpisodes.first { it.any { member -> member.id == added.id } }.size)
+
+        assertTrue(testRepository.removeFromLibrary(identity))
+        val retained = database.episodeDao().getBySourceAndRemoteId(identity.sourceId, identity.remoteId)
+        assertNotNull(retained)
+        assertEquals(false, retained?.isInLibrary)
+        assertTrue(testRepository.isDownloaded(identity))
+        val playable = testRepository.addOrGetStreamEpisode(sampleEpisode, samplePodcast)
+        assertNotNull(playable.localUri)
+        assertTrue(testRepository.libraryEpisodes.first { it.none { member -> member.id == added.id } }.isEmpty())
     }
 
     @Test
