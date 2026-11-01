@@ -58,7 +58,7 @@ object CatalogConfig {
             } else {
                 resolved.toASCIIString()
             }
-        } catch (_: IllegalArgumentException) {
+        } catch (_: Exception) {
             null
         }
     }
