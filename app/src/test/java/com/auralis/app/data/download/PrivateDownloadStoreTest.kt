@@ -48,6 +48,22 @@ class PrivateDownloadStoreTest {
     }
 
     @Test
+    fun sourceSpecificDeleteDoesNotRemoveAmbiguousLegacyFile() {
+        val remoteId = "ambiguous-legacy-${System.nanoTime()}"
+        val sourceFile = store.fileForIdentity("catalog:auralis", remoteId)
+        val legacyFile = store.fileForRemoteId(remoteId)
+        sourceFile.parentFile?.mkdirs()
+        sourceFile.writeBytes(ByteArray(128) { 3 })
+        legacyFile.writeBytes(ByteArray(128) { 4 })
+
+        store.delete("catalog:auralis", remoteId)
+
+        assertFalse("the exact source-owned file should be deleted", sourceFile.exists())
+        assertTrue("an ambiguous legacy file must be preserved", legacyFile.exists())
+        legacyFile.delete()
+    }
+
+    @Test
     fun hasLocalCopyRequiresMoreThanTinyFile() {
         val id = "tiny-${System.nanoTime()}"
         val target = store.fileForRemoteId(id)
