@@ -173,4 +173,59 @@ class CatalogPodcastDetailScreenTest {
             .performClick()
         composeRule.runOnIdle { assertEquals(1, retryCalls.get()) }
     }
+    @Test
+    fun downloadFailureExposesAnIndependentRetryAction() {
+        val repository = CatalogRepository()
+        val podcast = repository.getPodcast("ai-philosophy")!!
+        val episode = repository.getEpisode("ep-philo-1")!!
+        val identity = DownloadIdentity("catalog:auralis", episode.id)
+        val downloadCalls = AtomicInteger()
+
+        composeRule.setContent {
+            CatalogPodcastDetailScreen(
+                podcast = podcast,
+                catalogRepository = repository,
+                downloadErrors = mapOf(identity to "network unavailable"),
+                isDownloaded = { false },
+                onDownloadEpisode = { downloadCalls.incrementAndGet() },
+                onBack = {},
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("تلاش دوباره برای دانلود " + episode.title)
+            .assertExists()
+            .performClick()
+        composeRule.runOnIdle { assertEquals(1, downloadCalls.get()) }
+        composeRule.onNodeWithContentDescription("افزودن " + episode.title + " به کتابخانه")
+            .assertExists()
+    }
+
+    @Test
+    fun failedLibraryActionCanBeRetriedWithoutChangingDownloadState() {
+        val repository = CatalogRepository()
+        val podcast = repository.getPodcast("ai-philosophy")!!
+        val episode = repository.getEpisode("ep-philo-1")!!
+        val calls = AtomicInteger()
+
+        composeRule.setContent {
+            CatalogPodcastDetailScreen(
+                podcast = podcast,
+                catalogRepository = repository,
+                isDownloaded = { false },
+                onAddToLibrary = {
+                    if (calls.incrementAndGet() == 1) error("temporary database failure")
+                },
+                onBack = {},
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("افزودن " + episode.title + " به کتابخانه")
+            .performClick()
+        composeRule.waitUntil(5_000) { calls.get() == 1 }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("تلاش دوباره").assertExists().performClick()
+        composeRule.waitUntil(5_000) { calls.get() == 2 }
+        composeRule.runOnIdle { assertEquals(2, calls.get()) }
+    }
+
 }
