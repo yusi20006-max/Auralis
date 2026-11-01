@@ -269,6 +269,50 @@ class LibraryRepositoryTest {
     @Test
     fun explicitLibraryMembershipSurvivesDatabaseRestart() = runBlocking {
         val databaseName = "catalog-library-restart-" + System.nanoTime() + ".db"
+        val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, sampleEpisode.id)
+        val persistentScope = kotlinx.coroutines.CoroutineScope(
+            SupervisorJob() + Dispatchers.Unconfined,
+        )
+        val firstDatabase = Room.databaseBuilder(
+            context,
+            AuralisDatabase::class.java,
+            databaseName,
+        ).allowMainThreadQueries().build()
+
+        try {
+            val persistentRepository = LibraryRepository(
+                firstDatabase.episodeDao(),
+                PrivateDownloadStore(context),
+                persistentScope,
+            )
+            val added = persistentRepository.addToLibrary(sampleEpisode, samplePodcast)
+            assertNotNull(firstDatabase.episodeDao().getById(added.id))
+            firstDatabase.close()
+
+            val reopenedDatabase = Room.databaseBuilder(
+                context,
+                AuralisDatabase::class.java,
+                databaseName,
+            ).allowMainThreadQueries().build()
+            try {
+                val restored = reopenedDatabase.episodeDao().getBySourceAndRemoteId(
+                    identity.sourceId!!,
+                    identity.remoteId,
+                )
+                assertNotNull(restored)
+                assertEquals(added.id, restored?.id)
+            } finally {
+                reopenedDatabase.close()
+            }
+        } finally {
+            runCatching { firstDatabase.close() }
+            persistentScope.cancel()
+            context.deleteDatabase(databaseName)
+        }
+    }
+
+    @Test
+    fun streamResolveDoesNotCreatePermanentLibraryMembership() = runBlocking {
         val resolved = repository.addOrGetStreamEpisode(sampleEpisode, samplePodcast)
 
         assertEquals(CatalogConfig.SOURCE_ID, resolved.sourceId)
