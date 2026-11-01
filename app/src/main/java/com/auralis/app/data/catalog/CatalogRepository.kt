@@ -1,5 +1,6 @@
 package com.auralis.app.data.catalog
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,17 +10,55 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 
-/**
- * Catalog access.
- *
- * Loads from [CatalogConfig.catalogUrl] when online; falls back to the built-in
- * sample feed so Explore still works offline or before hosting is ready.
- */
-class CatalogRepository {
+/** Injectable boundary for deterministic CatalogRepository tests. */
+fun interface CatalogHttpClient {
+    fun get(url: String): String
+}
 
+/** Production HTTP implementation; timeouts are configurable for local-server tests. */
+class UrlConnectionCatalogHttpClient(
+    private val connectTimeoutMs: Int = DEFAULT_TIMEOUT_MS,
+    private val readTimeoutMs: Int = DEFAULT_TIMEOUT_MS,
+) : CatalogHttpClient {
+
+    init {
+        require(connectTimeoutMs > 0)
+        require(readTimeoutMs > 0)
+    }
+
+    override fun get(url: String): String {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
+            requestMethod = "GET"
+            instanceFollowRedirects = true
+            setRequestProperty("Accept", "application/json")
+        }
+        try {
+            val code = connection.responseCode
+            if (code !in 200..299) throw CatalogHttpException(code)
+            return connection.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    companion object {
+        private const val DEFAULT_TIMEOUT_MS = 12_000
+    }
+}
+
+class CatalogHttpException(val statusCode: Int) : IllegalStateException("HTTP " + statusCode)
+
+/**
+ * The built-in sample remains available as initial/offline content. A failed
+ * refresh never replaces the last known lists and is always reported as Error.
+ */
+class CatalogRepository(
+    private val httpClient: CatalogHttpClient = UrlConnectionCatalogHttpClient(),
+) {
     private val podcasts = MutableStateFlow(SAMPLE_PODCASTS)
     private val episodes = MutableStateFlow(SAMPLE_EPISODES)
-
     private val _loadState = MutableStateFlow<CatalogLoadState>(CatalogLoadState.Idle)
     val loadState = _loadState.asStateFlow()
 
@@ -27,8 +66,7 @@ class CatalogRepository {
 
     fun observePodcasts(category: String): Flow<List<CatalogPodcast>> =
         podcasts.map { list ->
-            if (category == "همه") list
-            else list.filter { it.category == category }
+            if (category == "همه") list else list.filter { it.category == category }
         }
 
     fun observeEpisodes(podcastId: String? = null): Flow<List<CatalogEpisode>> {
@@ -37,13 +75,9 @@ class CatalogRepository {
     }
 
     fun getPodcast(id: String): CatalogPodcast? = podcasts.value.find { it.id == id }
-
     fun getEpisode(id: String): CatalogEpisode? = episodes.value.find { it.id == id }
 
-    /**
-     * Fetch remote catalog JSON and replace in-memory lists on success.
-     * Keeps the previous (or sample) data if the network/parse fails.
-     */
+    /** Fetch, parse, and atomically replace the in-memory catalog only on success. */
     suspend fun refresh(): CatalogLoadState = withContext(Dispatchers.IO) {
         val url = CatalogConfig.catalogUrl.trim()
         if (url.isEmpty()) {
@@ -51,48 +85,30 @@ class CatalogRepository {
             _loadState.value = state
             return@withContext state
         }
+
         _loadState.value = CatalogLoadState.Loading
         try {
-            val body = httpGet(url)
-            val parsed = CatalogJsonParser.parse(body)
+            val parsed = CatalogJsonParser.parse(httpClient.get(url))
             if (parsed.podcasts.isEmpty()) {
                 val state = CatalogLoadState.Error("empty catalog")
                 _loadState.value = state
                 return@withContext state
             }
+
             podcasts.value = parsed.podcasts
             episodes.value = parsed.episodes
-            val state = CatalogLoadState.Success(
-                podcastCount = parsed.podcasts.size,
-                episodeCount = parsed.episodes.size,
-            )
+            val state = CatalogLoadState.Success(parsed.podcasts.size, parsed.episodes.size)
             _loadState.value = state
             state
-        } catch (e: Exception) {
-            val state = CatalogLoadState.Error(e.message ?: e.javaClass.simpleName)
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (failure: Exception) {
+            // Do not expose raw URLs, response bodies, or arbitrary server text to UI state.
+            val detail = (failure as? CatalogHttpException)?.message
+                ?: "Catalog request or parsing failed (" + failure.javaClass.simpleName + ")"
+            val state = CatalogLoadState.Error(detail)
             _loadState.value = state
             state
-        }
-    }
-
-    private fun httpGet(url: String): String {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 12_000
-            readTimeout = 12_000
-            requestMethod = "GET"
-            instanceFollowRedirects = true
-            setRequestProperty("Accept", "application/json")
-        }
-        try {
-            val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (code !in 200..299) {
-                throw IllegalStateException("HTTP $code: ${body.take(200)}")
-            }
-            return body
-        } finally {
-            connection.disconnect()
         }
     }
 
