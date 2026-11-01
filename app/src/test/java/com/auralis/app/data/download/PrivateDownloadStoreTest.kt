@@ -12,6 +12,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+import com.auralis.app.data.download.DownloadIdentity
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -151,4 +154,29 @@ class PrivateDownloadStoreTest {
         assertEquals("remote-only", store.storageKey("  ", "remote-only"))
         assertEquals("catalog:auralis::ep-1", store.storageKey("catalog:auralis", "ep-1"))
     }
+    @Test
+    fun cancellationFlagsAreIsolatedByCompositeIdentity() {
+        val remoteId = "same-remote-${System.nanoTime()}"
+        val catalog = DownloadIdentity("catalog:auralis", remoteId)
+        val rss = DownloadIdentity("rss:feed-1", remoteId)
+        val field = PrivateDownloadStore::class.java.getDeclaredField("cancelFlags").apply {
+            isAccessible = true
+        }
+        @Suppress("UNCHECKED_CAST")
+        val flags = field.get(store) as ConcurrentHashMap<DownloadIdentity, AtomicBoolean>
+
+        store.cancel(catalog)
+        assertTrue(flags[catalog]?.get() == true)
+        assertNull(flags[rss])
+
+        store.cancel(rss)
+        assertTrue(flags[catalog]?.get() == true)
+        assertTrue(flags[rss]?.get() == true)
+
+        store.clearCancel(catalog.sourceId, catalog.remoteId)
+        assertFalse(flags[catalog]?.get() == true)
+        assertTrue(flags[rss]?.get() == true)
+        flags.clear()
+    }
+
 }
