@@ -57,7 +57,7 @@ class PrivateDownloadStoreTest {
         sourceFile.writeBytes(ByteArray(128) { 3 })
         legacyFile.writeBytes(ByteArray(128) { 4 })
 
-        store.delete("catalog:auralis", remoteId)
+        assertTrue(store.deleteExact("catalog:auralis", remoteId))
 
         assertFalse("the exact source-owned file should be deleted", sourceFile.exists())
         assertTrue("an ambiguous legacy file must be preserved", legacyFile.exists())
