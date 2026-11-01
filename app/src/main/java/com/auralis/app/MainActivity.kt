@@ -308,6 +308,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             AuralisTheme {
                 val episodes by libraryRepository.episodes.collectAsState()
+                val libraryEpisodes by libraryRepository.libraryEpisodes.collectAsState()
                 val currentEpisodeId by libraryRepository.currentEpisodeId.collectAsState()
                 val currentEpisode = episodes.find { it.id == currentEpisodeId }
                 val playbackSpeed by playbackPreferences.speed.collectAsState()
@@ -315,14 +316,16 @@ class MainActivity : ComponentActivity() {
                 val downloadProgress by libraryRepository.downloadProgress.collectAsState()
                 val downloadErrors by libraryRepository.downloadErrors.collectAsState()
                 val lastDownloadError by libraryRepository.lastDownloadError.collectAsState()
-                val libraryIdentities = episodes.mapNotNull { episode ->
+                val libraryIdentities = libraryEpisodes.mapNotNull { episode ->
                     val sourceId = episode.sourceId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                     val remoteId = episode.remoteId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                     DownloadIdentity(sourceId, remoteId)
                 }.toSet()
-                val downloadedIdentities = libraryIdentities.filterTo(mutableSetOf()) {
-                    libraryRepository.isDownloaded(it)
-                }
+                val downloadedIdentities = episodes.mapNotNull { episode ->
+                    val sourceId = episode.sourceId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    val remoteId = episode.remoteId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    DownloadIdentity(sourceId, remoteId).takeIf(libraryRepository::isDownloaded)
+                }.toSet()
                 val catalogSourceId = CatalogConfig.SOURCE_ID
 
                 BackHandler(enabled = showNowPlaying || showSettings) {
@@ -472,7 +475,7 @@ class MainActivity : ComponentActivity() {
                                             AuralisDestination.NowPlaying,
                                             AuralisDestination.EpisodeDetail -> {
                                                 LibraryScreen(
-                                                    episodes = episodes,
+                                                    episodes = libraryEpisodes,
                                                     onEpisodeClick = { episode ->
                                                         libraryRepository.setCurrentEpisode(episode.id)
                                                         playEpisode(episode)
