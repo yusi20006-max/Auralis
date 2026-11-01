@@ -1,14 +1,16 @@
 package com.auralis.app.data.download
 
 import androidx.test.core.app.ApplicationProvider
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -50,7 +52,7 @@ class PrivateDownloadStoreTest {
         val id = "tiny-${System.nanoTime()}"
         val target = store.fileForRemoteId(id)
         target.parentFile?.mkdirs()
-        target.writeBytes(byteArrayOf(1, 2, 3)) // below MIN_VALID_BYTES (64)
+        target.writeBytes(byteArrayOf(1, 2, 3))
         assertFalse(store.hasLocalCopy(id))
         target.delete()
     }
@@ -79,5 +81,49 @@ class PrivateDownloadStoreTest {
     @Test
     fun availableBytesIsNonNegative() {
         assertTrue(store.availableBytes() >= 0L)
+    }
+
+    @Test
+    fun sameRemoteIdDifferentSourcesUseDistinctFiles() {
+        val remoteId = "shared-remote-${System.nanoTime()}"
+        val catalogFile = store.fileForIdentity("catalog:auralis", remoteId)
+        val rssFile = store.fileForIdentity("rss:feed-1", remoteId)
+        assertNotEquals(catalogFile.absolutePath, rssFile.absolutePath)
+
+        catalogFile.parentFile?.mkdirs()
+        catalogFile.writeBytes(ByteArray(128) { 1 })
+        rssFile.writeBytes(ByteArray(128) { 2 })
+        try {
+            assertTrue(store.hasLocalCopy("catalog:auralis", remoteId))
+            assertTrue(store.hasLocalCopy("rss:feed-1", remoteId))
+            assertNotEquals(
+                store.uriForIdentity("catalog:auralis", remoteId),
+                store.uriForIdentity("rss:feed-1", remoteId),
+            )
+        } finally {
+            store.delete("catalog:auralis", remoteId)
+            store.delete("rss:feed-1", remoteId)
+        }
+    }
+
+    @Test
+    fun identityLookupFallsBackToLegacyRemoteIdOnlyFile() {
+        val remoteId = "legacy-file-${System.nanoTime()}"
+        val legacy = store.fileForRemoteId(remoteId)
+        legacy.parentFile?.mkdirs()
+        legacy.writeBytes(ByteArray(128) { 9 })
+        try {
+            assertTrue(store.hasLocalCopy("catalog:auralis", remoteId))
+            assertNotNull(store.uriForIdentity("catalog:auralis", remoteId))
+        } finally {
+            store.delete("catalog:auralis", remoteId)
+        }
+    }
+
+    @Test
+    fun storageKeyIncludesSourceWhenPresent() {
+        assertEquals("remote-only", store.storageKey(null, "remote-only"))
+        assertEquals("remote-only", store.storageKey("  ", "remote-only"))
+        assertEquals("catalog:auralis::ep-1", store.storageKey("catalog:auralis", "ep-1"))
     }
 }
