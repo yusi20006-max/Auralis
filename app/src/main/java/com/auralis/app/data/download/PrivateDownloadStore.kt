@@ -163,6 +163,7 @@ class PrivateDownloadStore(private val context: Context) : DownloadStore {
 
         val free = availableBytes()
         if (free < MIN_FREE_BYTES) {
+            cancelFlags.remove(identity, flag)
             throw InsufficientSpaceException(free)
         }
 
@@ -170,11 +171,16 @@ class PrivateDownloadStore(private val context: Context) : DownloadStore {
         val partial = File(root, opaqueName(key) + ".part")
         if (partial.exists()) partial.delete()
 
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 30_000
-            readTimeout = 60_000
-            instanceFollowRedirects = true
-            requestMethod = "GET"
+        val connection = try {
+            (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 30_000
+                readTimeout = 60_000
+                instanceFollowRedirects = true
+                requestMethod = "GET"
+            }
+        } catch (error: Exception) {
+            cancelFlags.remove(identity, flag)
+            throw error
         }
         try {
             if (flag.get()) throw DownloadCancelledException(remoteId)
