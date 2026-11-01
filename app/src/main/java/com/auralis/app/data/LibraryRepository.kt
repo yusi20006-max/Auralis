@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -177,13 +178,13 @@ class LibraryRepository internal constructor(
             "Download identity remoteId must match the catalog episode"
         }
         if (!identity.isSourceAware) {
-            _downloadErrors.value = _downloadErrors.value +
-                (identity to "منبع دانلود مشخص نیست؛ فایل Legacy به‌صورت خودکار ساخته نمی‌شود.")
+            _downloadErrors.update { it +
+                (identity to "منبع دانلود مشخص نیست؛ فایل Legacy به‌صورت خودکار ساخته نمی‌شود.") }
             return@withContext null
         }
         val url = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
         if (url.isBlank()) {
-            _downloadErrors.value = _downloadErrors.value + (identity to "آدرس فایل خالی است.")
+            _downloadErrors.update { it + (identity to "آدرس فایل خالی است.") }
             return@withContext null
         }
 
@@ -197,28 +198,28 @@ class LibraryRepository internal constructor(
                 return@withLock upsertDownloaded(catalogEpisode, podcast, url, uri, identity)
             }
 
-            _downloadErrors.value = _downloadErrors.value - identity
-            _downloadingIdentities.value = _downloadingIdentities.value + identity
-            _downloadProgress.value = _downloadProgress.value + (identity to 0f)
+            _downloadErrors.update { it - identity }
+            _downloadingIdentities.update { it + identity }
+            _downloadProgress.update { it + (identity to 0f) }
             try {
                 val fileUri = downloadStore.download(identity, url) { progress ->
-                    _downloadProgress.value = _downloadProgress.value + (identity to progress)
+                    _downloadProgress.update { it + (identity to progress) }
                 }
                 upsertDownloaded(catalogEpisode, podcast, url, fileUri, identity)
             } catch (_: DownloadCancelledException) {
                 _downloadErrors.value = _downloadErrors.value - identity
                 null
             } catch (_: InsufficientSpaceException) {
-                _downloadErrors.value = _downloadErrors.value +
-                    (identity to "فضای ذخیره‌سازی کافی نیست.")
+                _downloadErrors.update { it +
+                    (identity to "فضای ذخیره‌سازی کافی نیست.") }
                 null
             } catch (_: Exception) {
-                _downloadErrors.value = _downloadErrors.value +
-                    (identity to "دانلود انجام نشد. اتصال را بررسی کنید و دوباره تلاش کنید.")
+                _downloadErrors.update { it +
+                    (identity to "دانلود انجام نشد. اتصال را بررسی کنید و دوباره تلاش کنید.") }
                 null
             } finally {
-                _downloadingIdentities.value = _downloadingIdentities.value - identity
-                _downloadProgress.value = _downloadProgress.value - identity
+                _downloadingIdentities.update { it - identity }
+                _downloadProgress.update { it - identity }
             }
         }
     }
