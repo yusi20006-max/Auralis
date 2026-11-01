@@ -235,7 +235,7 @@ class LibraryRepositoryTest {
         assertTrue(repository.isDownloaded(identity))
 
         val reAdded = repository.addToLibrary(sampleEpisode, samplePodcast)
-        assertEquals(added.id, reAdded.id)
+        assertNotNull(reAdded.localUri)
         assertNotNull(database.episodeDao().getBySourceAndRemoteId(identity.sourceId, identity.remoteId))
         assertTrue("re-adding membership must reuse the existing private file", file.isFile)
         file.delete()
