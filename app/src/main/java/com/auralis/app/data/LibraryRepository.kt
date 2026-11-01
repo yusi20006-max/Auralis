@@ -156,7 +156,7 @@ class LibraryRepository internal constructor(
     }
 
     fun clearDownloadError(identity: DownloadIdentity? = null) {
-        _downloadErrors.value = if (identity == null) emptyMap() else _downloadErrors.value - identity
+        _downloadErrors.update { errors -> if (identity == null) emptyMap() else errors - identity }
     }
 
     suspend fun downloadEpisodeOffline(
