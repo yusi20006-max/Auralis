@@ -153,6 +153,34 @@ class LibraryRepositoryTest {
     }
 
     @Test
+    fun explicitDeleteDownloadRemovesExactFileButKeepsLibraryMembership() = runBlocking {
+        val remoteId = "explicit-delete-${System.nanoTime()}"
+        val sourceId = CatalogConfig.SOURCE_ID
+        val file = repositoryDownloadStoreFile(sourceId, remoteId)
+        file.parentFile?.mkdirs()
+        file.writeBytes(ByteArray(128) { 6 })
+        val episodeId = "explicit-download-row-${System.nanoTime()}"
+        database.episodeDao().upsert(
+            EpisodeEntity(
+                id = episodeId,
+                title = "Keep library row",
+                remoteId = remoteId,
+                sourceId = sourceId,
+                localUri = Uri.parse("content://test/private-download").toString(),
+            ),
+        )
+
+        repository.deleteDownload(episodeId)
+        val updated = database.episodeDao().observeAll().first { rows ->
+            rows.any { it.id == episodeId && it.localUri == null }
+        }
+
+        assertEquals(1, updated.size)
+        assertTrue("explicit delete should remove the exact private file", !file.exists())
+        assertNotNull(database.episodeDao().getById(episodeId))
+    }
+
+    @Test
     fun streamResolveDoesNotCreatePermanentLibraryMembership() = runBlocking {
         val resolved = repository.addOrGetStreamEpisode(sampleEpisode, samplePodcast)
 
