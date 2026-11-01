@@ -182,6 +182,34 @@ class LibraryRepositoryTest {
     }
 
     @Test
+    fun explicitDeleteDownloadPreservesAmbiguousLegacyFileAndUri() = runBlocking {
+        val remoteId = "legacy-explicit-delete-${System.nanoTime()}"
+        val legacyFile = PrivateDownloadStore(context).fileForRemoteId(remoteId)
+        legacyFile.parentFile?.mkdirs()
+        legacyFile.writeBytes(ByteArray(128) { 8 })
+        val episodeId = "legacy-download-row-${System.nanoTime()}"
+        val legacyUri = Uri.fromFile(legacyFile).toString()
+        database.episodeDao().upsert(
+            EpisodeEntity(
+                id = episodeId,
+                title = "Ambiguous legacy download",
+                remoteId = remoteId,
+                sourceId = null,
+                localUri = legacyUri,
+            ),
+        )
+
+        repository.deleteDownload(episodeId)
+        val row = database.episodeDao().getById(episodeId)
+
+        assertTrue("ambiguous legacy file must be preserved", legacyFile.isFile)
+        assertEquals("legacy URI must remain available", legacyUri, row?.localUri)
+        assertNotNull(row)
+        legacyFile.delete()
+        Unit
+    }
+
+    @Test
     fun streamResolveDoesNotCreatePermanentLibraryMembership() = runBlocking {
         val resolved = repository.addOrGetStreamEpisode(sampleEpisode, samplePodcast)
 
