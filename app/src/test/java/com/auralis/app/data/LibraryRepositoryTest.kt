@@ -4,6 +4,9 @@ import android.content.Context
 import android.net.Uri
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.auralis.app.data.catalog.CatalogConfig
+import com.auralis.app.data.catalog.CatalogEpisode
+import com.auralis.app.data.catalog.CatalogPodcast
 import com.auralis.app.data.db.AuralisDatabase
 import com.auralis.app.data.db.EpisodeEntity
 import com.auralis.app.data.download.PrivateDownloadStore
@@ -16,6 +19,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -31,6 +36,21 @@ class LibraryRepositoryTest {
     private lateinit var database: AuralisDatabase
     private lateinit var repositoryScope: kotlinx.coroutines.CoroutineScope
     private lateinit var repository: LibraryRepository
+
+    private val samplePodcast = CatalogPodcast(
+        id = "ai-philosophy",
+        title = "فلسفه با هوش مصنوعی",
+        description = "test",
+    )
+
+    private val sampleEpisode = CatalogEpisode(
+        id = "ep-philo-1",
+        podcastId = "ai-philosophy",
+        title = "آیا ماشین می‌تواند بفهمد؟",
+        description = "desc",
+        audioUrl = "https://example.com/a.mp3",
+        durationMs = 60_000L,
+    )
 
     @Before
     fun setUp() {
@@ -102,5 +122,69 @@ class LibraryRepositoryTest {
         assertEquals(1, rows.size)
         assertTrue(results.all { it.localUri == uri })
         assertEquals(rows.single().id, results.first().id)
+    }
+
+    @Test
+    fun streamResolveDoesNotCreatePermanentLibraryMembership() = runBlocking {
+        val resolved = repository.addOrGetStreamEpisode(sampleEpisode, samplePodcast)
+
+        assertEquals(CatalogConfig.SOURCE_ID, resolved.sourceId)
+        assertEquals(sampleEpisode.id, resolved.remoteId)
+        assertEquals(0, database.episodeDao().observeAll().first().size)
+    }
+
+    @Test
+    fun addToLibraryCreatesDurableMembershipWithSourceId() = runBlocking {
+        val added = repository.addToLibrary(sampleEpisode, samplePodcast)
+
+        assertEquals(CatalogConfig.SOURCE_ID, added.sourceId)
+        assertEquals(sampleEpisode.id, added.remoteId)
+
+        val rows = database.episodeDao().observeAll().first()
+        assertEquals(1, rows.size)
+        assertEquals(CatalogConfig.SOURCE_ID, rows.single().sourceId)
+        assertEquals(sampleEpisode.id, rows.single().remoteId)
+    }
+
+    @Test
+    fun addToLibraryIsIdempotentForSameCompositeIdentity() = runBlocking {
+        val first = repository.addToLibrary(sampleEpisode, samplePodcast)
+        val second = repository.addToLibrary(sampleEpisode, samplePodcast)
+
+        assertEquals(first.id, second.id)
+        assertEquals(1, database.episodeDao().observeAll().first().size)
+    }
+
+    @Test
+    fun streamResolveReturnsExistingLibraryRowAfterAddToLibrary() = runBlocking {
+        val added = repository.addToLibrary(sampleEpisode, samplePodcast)
+        // Ensure StateFlow has the row for non-suspending resolve path.
+        repository.episodes.first { list -> list.any { it.id == added.id } }
+
+        val resolved = repository.addOrGetStreamEpisode(sampleEpisode, samplePodcast)
+        assertEquals(added.id, resolved.id)
+        assertEquals(CatalogConfig.SOURCE_ID, resolved.sourceId)
+    }
+
+    @Test
+    fun legacyNullSourceRowIsNotClaimedByCatalogCompositeLookup() = runBlocking {
+        database.episodeDao().upsert(
+            EpisodeEntity(
+                id = "legacy-row",
+                title = "Legacy",
+                remoteId = sampleEpisode.id,
+                sourceId = null,
+            ),
+        )
+        repository.episodes.first { it.any { row -> row.id == "legacy-row" } }
+
+        val resolved = repository.addOrGetStreamEpisode(sampleEpisode, samplePodcast)
+        // Must not reuse the legacy row id or assign a guessed source to it.
+        assertNotEquals("legacy-row", resolved.id)
+        assertEquals(CatalogConfig.SOURCE_ID, resolved.sourceId)
+
+        val legacy = database.episodeDao().getById("legacy-row")
+        assertNotNull(legacy)
+        assertNull(legacy!!.sourceId)
     }
 }
