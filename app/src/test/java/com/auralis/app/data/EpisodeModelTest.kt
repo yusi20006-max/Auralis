@@ -28,6 +28,7 @@ class EpisodeModelTest {
         isAiGenerated = false,
         lastPositionMs = 30_000L,
         lastPlayedAt = 1_700_000_000_000L,
+        sourceId = "catalog:auralis",
     )
 
     @Test
@@ -45,6 +46,13 @@ class EpisodeModelTest {
         assertNull(restored.artworkUri)
         assertNull(restored.remoteId)
         assertNull(restored.lastPlayedAt)
+        assertNull(restored.sourceId)
+    }
+
+    @Test
+    fun legacyRemoteEpisodeCanKeepUnknownSourceNull() {
+        val legacy = Episode(id = "legacy", title = "قدیمی", remoteId = "remote-old")
+        assertNull(EpisodeEntity.from(legacy).toEpisode().sourceId)
     }
 
     @Test
