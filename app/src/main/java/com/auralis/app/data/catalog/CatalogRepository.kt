@@ -1,18 +1,27 @@
 package com.auralis.app.data.catalog
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
- * Catalog access. Sample feed uses public HTTPS MP3s so streaming can be tested
- * before the real Auralis CDN is online.
+ * Catalog access.
+ *
+ * Loads from [CatalogConfig.catalogUrl] when online; falls back to the built-in
+ * sample feed so Explore still works offline or before hosting is ready.
  */
 class CatalogRepository {
 
     private val podcasts = MutableStateFlow(SAMPLE_PODCASTS)
     private val episodes = MutableStateFlow(SAMPLE_EPISODES)
+
+    private val _loadState = MutableStateFlow<CatalogLoadState>(CatalogLoadState.Idle)
+    val loadState = _loadState.asStateFlow()
 
     fun observePodcasts(): Flow<List<CatalogPodcast>> = podcasts.asStateFlow()
 
@@ -31,8 +40,63 @@ class CatalogRepository {
 
     fun getEpisode(id: String): CatalogEpisode? = episodes.value.find { it.id == id }
 
+    /**
+     * Fetch remote catalog JSON and replace in-memory lists on success.
+     * Keeps the previous (or sample) data if the network/parse fails.
+     */
+    suspend fun refresh(): CatalogLoadState = withContext(Dispatchers.IO) {
+        val url = CatalogConfig.catalogUrl.trim()
+        if (url.isEmpty()) {
+            val state = CatalogLoadState.Skipped("catalogUrl empty")
+            _loadState.value = state
+            return@withContext state
+        }
+        _loadState.value = CatalogLoadState.Loading
+        try {
+            val body = httpGet(url)
+            val parsed = CatalogJsonParser.parse(body)
+            if (parsed.podcasts.isEmpty()) {
+                val state = CatalogLoadState.Error("empty catalog")
+                _loadState.value = state
+                return@withContext state
+            }
+            podcasts.value = parsed.podcasts
+            episodes.value = parsed.episodes
+            val state = CatalogLoadState.Success(
+                podcastCount = parsed.podcasts.size,
+                episodeCount = parsed.episodes.size,
+            )
+            _loadState.value = state
+            state
+        } catch (e: Exception) {
+            val state = CatalogLoadState.Error(e.message ?: e.javaClass.simpleName)
+            _loadState.value = state
+            state
+        }
+    }
+
+    private fun httpGet(url: String): String {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 12_000
+            readTimeout = 12_000
+            requestMethod = "GET"
+            instanceFollowRedirects = true
+            setRequestProperty("Accept", "application/json")
+        }
+        try {
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            if (code !in 200..299) {
+                throw IllegalStateException("HTTP $code: ${body.take(200)}")
+            }
+            return body
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     companion object {
-        // Public test streams (HTTPS) — replace with Auralis CDN URLs when available.
         private const val STREAM_1 =
             "https://storage.googleapis.com/exoplayer-test-media-0/Jazz_In_Paris.mp3"
         private const val STREAM_2 =
@@ -108,4 +172,12 @@ class CatalogRepository {
             ),
         )
     }
+}
+
+sealed class CatalogLoadState {
+    data object Idle : CatalogLoadState()
+    data object Loading : CatalogLoadState()
+    data class Success(val podcastCount: Int, val episodeCount: Int) : CatalogLoadState()
+    data class Error(val message: String) : CatalogLoadState()
+    data class Skipped(val reason: String) : CatalogLoadState()
 }

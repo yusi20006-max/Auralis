@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "sourceId": "catalog:auralis",
+  "updatedAt": "2026-11-01T00:00:00Z",
+  "podcasts": [
+    {
+      "id": "ai-philosophy",
+      "title": "فلسفه با هوش مصنوعی",
+      "description": "گفت‌وگوهای کوتاه تولیدشده با AI درباره معنا، اخلاق و آگاهی.",
+      "coverUrl": null,
+      "isAiGenerated": true,
+      "episodeCount": 2,
+      "category": "فلسفه"
+    },
+    {
+      "id": "ai-science",
+      "title": "علم به زبان ساده",
+      "description": "اپیزودهای علمی کوتاه با روایت AI.",
+      "coverUrl": null,
+      "isAiGenerated": true,
+      "episodeCount": 1,
+      "category": "علم"
+    },
+    {
+      "id": "ai-tech",
+      "title": "مرزهای تکنولوژی",
+      "description": "نگاهی به آینده ابزارها و مدل‌های زبانی.",
+      "coverUrl": null,
+      "isAiGenerated": true,
+      "episodeCount": 1,
+      "category": "تکنولوژی"
+    }
+  ],
+  "episodes": [
+    {
+      "id": "ep-philo-1",
+      "podcastId": "ai-philosophy",
+      "title": "آیا ماشین می‌تواند بفهمد؟",
+      "description": "نمونه استریم HTTPS برای تست پخش آنلاین.",
+      "audioUrl": "https://storage.googleapis.com/exoplayer-test-media-0/Jazz_In_Paris.mp3",
+      "durationMs": 0,
+      "publishedAtEpochMs": 0,
+      "isAiGenerated": true
+    },
+    {
+      "id": "ep-philo-2",
+      "podcastId": "ai-philosophy",
+      "title": "اخلاق تولید محتوا با AI",
+      "description": "نمونه استریم — SoundHelix 1.",
+      "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+      "durationMs": 0,
+      "publishedAtEpochMs": 0,
+      "isAiGenerated": true
+    },
+    {
+      "id": "ep-sci-1",
+      "podcastId": "ai-science",
+      "title": "سیاه‌چاله‌ها در ده دقیقه",
+      "description": "نمونه استریم — SoundHelix 2.",
+      "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+      "durationMs": 0,
+      "publishedAtEpochMs": 0,
+      "isAiGenerated": true
+    },
+    {
+      "id": "ep-tech-1",
+      "podcastId": "ai-tech",
+      "title": "مدل‌های زبانی چه چیزی را بلدند؟",
+      "description": "نمونه استریم — SoundHelix 3.",
+      "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+      "durationMs": 0,
+      "publishedAtEpochMs": 0,
+      "isAiGenerated": true
+    }
+  ]
+}

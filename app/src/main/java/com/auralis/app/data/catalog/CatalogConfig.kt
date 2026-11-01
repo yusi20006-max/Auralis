@@ -1,22 +1,31 @@
 package com.auralis.app.data.catalog
 
 /**
- * When you have a host, set [baseUrl] (e.g. https://cdn.auralis.example)
- * and point catalog episode [CatalogEpisode.audioUrl] to full paths or
- * relative paths resolved with [resolveAudioUrl].
+ * Hosted catalog configuration.
  *
- * Until then, sample HTTPS URLs in [CatalogRepository] are used as-is.
+ * Default [catalogUrl] points at the JSON file in this repo so the app can
+ * load a real HTTP catalog without a separate CDN.
+ *
+ * Preferred production URL after GitHub Pages is enabled on `/docs`:
+ * `https://yusi20006-max.github.io/Auralis/catalog.json`
  *
  * [SOURCE_ID] is the stable remote-source identity for the hosted Auralis
  * catalog. It forms the composite Episode remote identity together with
- * [CatalogEpisode.id] as remoteId. Do not reuse this value for RSS or
- * other independent sources.
+ * [CatalogEpisode.id] as remoteId.
  */
 object CatalogConfig {
     /** Stable source identity for the hosted Auralis catalog. */
     const val SOURCE_ID: String = "catalog:auralis"
 
-    /** Empty = use absolute URLs from the catalog sample / API. */
+    /**
+     * HTTP endpoint for the catalog JSON.
+     * Override at runtime if needed; empty disables remote fetch.
+     */
+    @Volatile
+    var catalogUrl: String =
+        "https://raw.githubusercontent.com/yusi20006-max/Auralis/main/docs/catalog.json"
+
+    /** Optional CDN base for relative audio paths inside the catalog JSON. */
     @Volatile
     var baseUrl: String = ""
 
