@@ -572,4 +572,23 @@ class LibraryRepositoryTest {
         assertFalse(retained.isInLibrary)
         assertTrue(testRepository.isDownloaded(identity))
     }
+
+    @Test
+    fun reimportingRemovedLocalEpisodeRestoresMembershipWithoutDuplicate() = runBlocking {
+        val uri = Uri.parse("content://media/audio/reimport-regression")
+        val first = repository.addLocalEpisode(uri, "Original local episode")
+        repository.deleteEpisode(first.id)
+
+        database.episodeDao().observeAll().first { rows ->
+            rows.any { it.id == first.id && !it.isInLibrary }
+        }
+
+        val reimported = repository.addLocalEpisode(uri, "Reimported local episode")
+        assertEquals(first.id, reimported.id)
+        assertTrue(reimported.isInLibrary)
+        val rows = database.episodeDao().observeAll().first { it.any { row -> row.id == first.id && row.isInLibrary } }
+        assertEquals(1, rows.count { it.localUri == uri.toString() })
+        assertTrue(repository.libraryEpisodes.first { members -> members.any { it.id == first.id } }
+            .any { it.id == first.id })
+    }
 }
