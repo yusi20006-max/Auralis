@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -18,11 +19,31 @@ interface EpisodeDao {
     @Query("SELECT * FROM episodes WHERE remoteId = :remoteId LIMIT 1")
     suspend fun getByRemoteId(remoteId: String): EpisodeEntity?
 
+    @Query("SELECT * FROM episodes WHERE sourceId = :sourceId AND remoteId = :remoteId LIMIT 1")
+    suspend fun getBySourceAndRemoteId(sourceId: String, remoteId: String): EpisodeEntity?
+
     @Query("SELECT * FROM episodes WHERE localUri = :localUri LIMIT 1")
     suspend fun getByLocalUri(localUri: String): EpisodeEntity?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(episode: EpisodeEntity)
+    /**
+     * Updates only by the stable primary key. A new row is inserted with ABORT
+     * semantics, so a collision on the secondary (sourceId, remoteId) identity
+     * cannot REPLACE and delete an existing episode with its playback/download state.
+     */
+    @Transaction
+    suspend fun upsert(episode: EpisodeEntity) {
+        if (getById(episode.id) == null) {
+            insert(episode)
+        } else {
+            update(episode)
+        }
+    }
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(episode: EpisodeEntity)
+
+    @Update
+    suspend fun update(episode: EpisodeEntity): Int
 
     /**
      * Serializes the lookup and insert in one Room transaction so concurrent
