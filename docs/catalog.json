@@ -1,7 +1,7 @@
 {
   "version": 1,
   "sourceId": "catalog:auralis",
-  "updatedAt": "2026-11-01T10:15:00Z",
+  "updatedAt": "2026-11-01T10:45:00Z",
   "podcasts": [
     {
       "id": "ai-philosophy",
@@ -32,8 +32,8 @@
     },
     {
       "id": "karamazov-brothers",
-      "title": "برادران کارامازوف",
-      "description": "روایت و گفت‌وگو پیرامون رمان برادران کارامازوف — تست catalog ریموت.",
+      "title": "برادران کارامازوف — نسخه ۲",
+      "description": "روایت و گفت‌وگو پیرامون رمان برادران کارامازوف — تست دوم catalog ریموت.",
       "coverUrl": null,
       "isAiGenerated": true,
       "episodeCount": 1,
