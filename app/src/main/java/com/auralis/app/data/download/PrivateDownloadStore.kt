@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * App-private audio storage (Issue #15 / Stage 4).
  * - Opaque names derived from stable identity
- * - Primary key: (sourceId, remoteId); legacy remoteId-only files still resolved
+ * - Primary key: (sourceId, remoteId); ambiguous remoteId-only legacy files are preserved, never auto-matched
  * - Cancel + .part cleanup, free-space guard, final validation
  */
 class PrivateDownloadStore(private val context: Context) {
