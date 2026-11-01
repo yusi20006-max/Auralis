@@ -506,9 +506,6 @@ class MainActivity : ComponentActivity() {
                                                         )
                                                     },
                                                     onStreamEpisode = { podcast, catalogEpisode ->
-                                                        if (catalogEpisode.audioUrl.isBlank()) {
-                                                            return@ExploreScreen
-                                                        }
                                                         val episode = libraryRepository.addOrGetStreamEpisode(
                                                             catalogEpisode,
                                                             podcast,
