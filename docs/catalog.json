@@ -1,7 +1,7 @@
 {
   "version": 1,
   "sourceId": "catalog:auralis",
-  "updatedAt": "2026-11-01T10:10:00Z",
+  "updatedAt": "2026-11-01T10:15:00Z",
   "podcasts": [
     {
       "id": "ai-philosophy",
@@ -29,6 +29,15 @@
       "isAiGenerated": true,
       "episodeCount": 1,
       "category": "تکنولوژی"
+    },
+    {
+      "id": "karamazov-brothers",
+      "title": "برادران کارامازوف",
+      "description": "روایت و گفت‌وگو پیرامون رمان برادران کارامازوف — تست catalog ریموت.",
+      "coverUrl": null,
+      "isAiGenerated": true,
+      "episodeCount": 1,
+      "category": "فلسفه"
     }
   ],
   "episodes": [
@@ -68,6 +77,16 @@
       "title": "مدل‌های زبانی چه چیزی را بلدند؟",
       "description": "نمونه استریم — SoundHelix 3.",
       "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+      "durationMs": 0,
+      "publishedAtEpochMs": 0,
+      "isAiGenerated": true
+    },
+    {
+      "id": "ep-karamazov-1",
+      "podcastId": "karamazov-brothers",
+      "title": "مقدمه: برادران و پدر",
+      "description": "اپیزود تست برای پادکست برادران کارامازوف.",
+      "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
       "durationMs": 0,
       "publishedAtEpochMs": 0,
       "isAiGenerated": true
