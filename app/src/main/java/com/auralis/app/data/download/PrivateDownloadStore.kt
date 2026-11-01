@@ -75,12 +75,8 @@ class PrivateDownloadStore(private val context: Context) {
         fileForKey(key).delete()
         File(root, opaqueName(key) + ".part").delete()
         cancelFlags.remove(key)
-        if (!sourceId.isNullOrBlank()) {
-            val legacyKey = storageKey(null, remoteId)
-            fileForKey(legacyKey).delete()
-            File(root, opaqueName(legacyKey) + ".part").delete()
-            cancelFlags.remove(legacyKey)
-        }
+        // A source-aware delete must never remove a remoteId-only legacy file:
+        // its source ownership is unknown and it may belong to another source.
     }
 
     fun cancel(remoteId: String) =
