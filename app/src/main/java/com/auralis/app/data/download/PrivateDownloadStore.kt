@@ -46,10 +46,8 @@ class PrivateDownloadStore(private val context: Context) {
     fun hasLocalCopy(sourceId: String?, remoteId: String): Boolean {
         val primary = fileForIdentity(sourceId, remoteId)
         if (primary.isFile && primary.length() > MIN_VALID_BYTES) return true
-        if (!sourceId.isNullOrBlank()) {
-            val legacy = fileForRemoteId(remoteId)
-            if (legacy.isFile && legacy.length() > MIN_VALID_BYTES) return true
-        }
+        // A remoteId-only legacy file has unknown source ownership. Do not
+        // silently attach it to a newly identified source.
         return false
     }
 
@@ -59,10 +57,7 @@ class PrivateDownloadStore(private val context: Context) {
     fun uriForIdentity(sourceId: String?, remoteId: String): Uri? {
         val primary = fileForIdentity(sourceId, remoteId)
         if (primary.isFile && primary.length() > MIN_VALID_BYTES) return contentUri(primary)
-        if (!sourceId.isNullOrBlank()) {
-            val legacy = fileForRemoteId(remoteId)
-            if (legacy.isFile && legacy.length() > MIN_VALID_BYTES) return contentUri(legacy)
-        }
+        // Do not auto-match ambiguous remoteId-only files to a known source.
         return null
     }
 
