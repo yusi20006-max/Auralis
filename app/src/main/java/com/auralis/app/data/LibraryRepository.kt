@@ -65,6 +65,9 @@ class LibraryRepository internal constructor(
     // A single identity serializes its own requests; different sources never share a lock.
     private val downloadMutexes = ConcurrentHashMap<DownloadIdentity, Mutex>()
 
+    // Membership mutations are serialized separately from download file operations.
+    private val libraryMembershipMutexes = ConcurrentHashMap<DownloadIdentity, Mutex>()
+
     suspend fun addLocalEpisode(
         uri: Uri,
         title: String,
@@ -123,29 +126,50 @@ class LibraryRepository internal constructor(
         catalogEpisode: CatalogEpisode,
         podcast: CatalogPodcast?,
     ): Episode = withContext(Dispatchers.IO) {
-        val sourceId = CatalogConfig.SOURCE_ID
-        val remoteId = catalogEpisode.id
+        val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, catalogEpisode.id)
         val resolvedUrl = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
+        val mutex = libraryMembershipMutexes.getOrPut(identity) { Mutex() }
 
-        findCatalogEpisodeSuspend(sourceId, remoteId)?.let { existing ->
-            return@withContext existing.copy(audioUrl = resolvedUrl)
+        mutex.withLock {
+            findCatalogEpisodeSuspend(identity.sourceId!!, identity.remoteId)?.let { existing ->
+                return@withLock existing.copy(audioUrl = resolvedUrl)
+            }
+
+            val privateUri = downloadStore.uriForIdentity(identity)
+            val episode = Episode(
+                id = UUID.randomUUID().toString(),
+                title = catalogEpisode.title,
+                podcastName = podcast?.title ?: "Auralis",
+                description = catalogEpisode.description,
+                durationMs = catalogEpisode.durationMs,
+                remoteId = identity.remoteId,
+                audioUrl = resolvedUrl,
+                localUri = privateUri,
+                isAiGenerated = catalogEpisode.isAiGenerated,
+                sourceId = identity.sourceId,
+            )
+            dao.upsert(EpisodeEntity.from(episode))
+            episode
         }
+    }
 
-        val privateUri = downloadStore.uriForIdentity(DownloadIdentity(sourceId, remoteId))
-        val episode = Episode(
-            id = UUID.randomUUID().toString(),
-            title = catalogEpisode.title,
-            podcastName = podcast?.title ?: "Auralis",
-            description = catalogEpisode.description,
-            durationMs = catalogEpisode.durationMs,
-            remoteId = remoteId,
-            audioUrl = resolvedUrl,
-            localUri = privateUri,
-            isAiGenerated = catalogEpisode.isAiGenerated,
-            sourceId = sourceId,
-        )
-        dao.upsert(EpisodeEntity.from(episode))
-        episode
+    /**
+     * Removes only the durable Library membership for one exact remote identity.
+     * A private download is a separate resource and is deliberately left intact.
+     */
+    suspend fun removeFromLibrary(identity: DownloadIdentity): Boolean = withContext(Dispatchers.IO) {
+        val sourceId = identity.sourceId?.takeIf { it.isNotBlank() } ?: return@withContext false
+        val mutex = libraryMembershipMutexes.getOrPut(identity) { Mutex() }
+
+        mutex.withLock {
+            val existing = dao.getBySourceAndRemoteId(sourceId, identity.remoteId)
+                ?: return@withLock false
+            dao.delete(existing.id)
+            if (_currentEpisodeId.value == existing.id) {
+                _currentEpisodeId.value = null
+            }
+            true
+        }
     }
 
     fun isDownloaded(identity: DownloadIdentity): Boolean =
