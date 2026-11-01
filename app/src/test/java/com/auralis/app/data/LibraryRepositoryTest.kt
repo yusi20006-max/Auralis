@@ -68,6 +68,9 @@ class LibraryRepositoryTest {
         )
     }
 
+    private fun repositoryDownloadStoreFile(sourceId: String, remoteId: String) =
+        PrivateDownloadStore(context).fileForIdentity(sourceId, remoteId)
+
     @After
     fun tearDown() {
         repositoryScope.cancel()
@@ -121,6 +124,89 @@ class LibraryRepositoryTest {
         assertEquals(1, rows.size)
         assertTrue(results.all { it.localUri == uri })
         assertEquals(rows.single().id, results.first().id)
+    }
+
+    @Test
+    fun removingLibraryMembershipPreservesDownloadedFile() = runBlocking {
+        val remoteId = "preserve-download-${System.nanoTime()}"
+        val sourceId = CatalogConfig.SOURCE_ID
+        val file = repositoryDownloadStoreFile(sourceId, remoteId)
+        file.parentFile?.mkdirs()
+        file.writeBytes(ByteArray(128) { 5 })
+        val episodeId = "downloaded-row-${System.nanoTime()}"
+        database.episodeDao().upsert(
+            EpisodeEntity(
+                id = episodeId,
+                title = "Downloaded episode",
+                remoteId = remoteId,
+                sourceId = sourceId,
+                localUri = Uri.parse("content://test/downloaded").toString(),
+            ),
+        )
+
+        repository.deleteEpisode(episodeId)
+        database.episodeDao().observeAll().first { rows -> rows.none { it.id == episodeId } }
+
+        assertTrue("removing Library membership must preserve the offline file", file.isFile)
+        assertTrue(file.length() > 64L)
+        file.delete()
+        Unit
+    }
+
+    @Test
+    fun explicitDeleteDownloadRemovesExactFileButKeepsLibraryMembership() = runBlocking {
+        val remoteId = "explicit-delete-${System.nanoTime()}"
+        val sourceId = CatalogConfig.SOURCE_ID
+        val file = repositoryDownloadStoreFile(sourceId, remoteId)
+        file.parentFile?.mkdirs()
+        file.writeBytes(ByteArray(128) { 6 })
+        val episodeId = "explicit-download-row-${System.nanoTime()}"
+        database.episodeDao().upsert(
+            EpisodeEntity(
+                id = episodeId,
+                title = "Keep library row",
+                remoteId = remoteId,
+                sourceId = sourceId,
+                localUri = Uri.parse("content://test/private-download").toString(),
+            ),
+        )
+
+        repository.deleteDownload(episodeId)
+        val updated = database.episodeDao().observeAll().first { rows ->
+            rows.any { it.id == episodeId && it.localUri == null }
+        }
+
+        assertEquals(1, updated.size)
+        assertTrue("explicit delete should remove the exact private file", !file.exists())
+        assertNotNull(database.episodeDao().getById(episodeId))
+    }
+
+    @Test
+    fun explicitDeleteDownloadPreservesAmbiguousLegacyFileAndUri() = runBlocking {
+        val remoteId = "legacy-explicit-delete-${System.nanoTime()}"
+        val legacyFile = PrivateDownloadStore(context).fileForRemoteId(remoteId)
+        legacyFile.parentFile?.mkdirs()
+        legacyFile.writeBytes(ByteArray(128) { 8 })
+        val episodeId = "legacy-download-row-${System.nanoTime()}"
+        val legacyUri = Uri.fromFile(legacyFile).toString()
+        database.episodeDao().upsert(
+            EpisodeEntity(
+                id = episodeId,
+                title = "Ambiguous legacy download",
+                remoteId = remoteId,
+                sourceId = null,
+                localUri = legacyUri,
+            ),
+        )
+
+        repository.deleteDownload(episodeId)
+        val row = database.episodeDao().getById(episodeId)
+
+        assertTrue("ambiguous legacy file must be preserved", legacyFile.isFile)
+        assertEquals("legacy URI must remain available", legacyUri, row?.localUri)
+        assertNotNull(row)
+        legacyFile.delete()
+        Unit
     }
 
     @Test

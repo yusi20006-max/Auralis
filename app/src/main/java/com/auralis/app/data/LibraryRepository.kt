@@ -243,13 +243,30 @@ class LibraryRepository internal constructor(
 
     fun deleteEpisode(episodeId: String) {
         scope.launch {
-            val entity = dao.getById(episodeId)
-            entity?.remoteId?.let { remoteId ->
-                downloadStore.delete(entity.sourceId, remoteId)
-            }
+            // Removing Library membership must not delete the user's offline file.
+            // The private download remains addressable by its stable source identity.
             dao.delete(episodeId)
             if (_currentEpisodeId.value == episodeId) {
                 _currentEpisodeId.value = null
+            }
+        }
+    }
+
+    /**
+     * Explicitly removes the private offline copy while keeping Library membership.
+     * Only the exact source identity is deleted; ambiguous legacy files are not claimed
+     * by a source-aware row.
+     */
+    fun deleteDownload(episodeId: String) {
+        scope.launch {
+            val entity = dao.getById(episodeId) ?: return@launch
+            val sourceId = entity.sourceId?.takeIf { it.isNotBlank() } ?: return@launch
+            val remoteId = entity.remoteId?.takeIf { it.isNotBlank() } ?: return@launch
+
+            // Null-source rows address ambiguous legacy storage; never delete those files.
+            // Keep the database URI unless the exact source-owned file is removed.
+            if (downloadStore.deleteExact(sourceId, remoteId)) {
+                dao.updateLocalUri(episodeId, null)
             }
         }
     }

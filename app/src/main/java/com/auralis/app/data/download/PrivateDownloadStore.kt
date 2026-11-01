@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * App-private audio storage (Issue #15 / Stage 4).
  * - Opaque names derived from stable identity
- * - Primary key: (sourceId, remoteId); legacy remoteId-only files still resolved
+ * - Primary key: (sourceId, remoteId); ambiguous remoteId-only legacy files are preserved, never auto-matched
  * - Cancel + .part cleanup, free-space guard, final validation
  */
 class PrivateDownloadStore(private val context: Context) {
@@ -46,10 +46,8 @@ class PrivateDownloadStore(private val context: Context) {
     fun hasLocalCopy(sourceId: String?, remoteId: String): Boolean {
         val primary = fileForIdentity(sourceId, remoteId)
         if (primary.isFile && primary.length() > MIN_VALID_BYTES) return true
-        if (!sourceId.isNullOrBlank()) {
-            val legacy = fileForRemoteId(remoteId)
-            if (legacy.isFile && legacy.length() > MIN_VALID_BYTES) return true
-        }
+        // A remoteId-only legacy file has unknown source ownership. Do not
+        // silently attach it to a newly identified source.
         return false
     }
 
@@ -59,10 +57,7 @@ class PrivateDownloadStore(private val context: Context) {
     fun uriForIdentity(sourceId: String?, remoteId: String): Uri? {
         val primary = fileForIdentity(sourceId, remoteId)
         if (primary.isFile && primary.length() > MIN_VALID_BYTES) return contentUri(primary)
-        if (!sourceId.isNullOrBlank()) {
-            val legacy = fileForRemoteId(remoteId)
-            if (legacy.isFile && legacy.length() > MIN_VALID_BYTES) return contentUri(legacy)
-        }
+        // Do not auto-match ambiguous remoteId-only files to a known source.
         return null
     }
 
@@ -75,12 +70,28 @@ class PrivateDownloadStore(private val context: Context) {
         fileForKey(key).delete()
         File(root, opaqueName(key) + ".part").delete()
         cancelFlags.remove(key)
-        if (!sourceId.isNullOrBlank()) {
-            val legacyKey = storageKey(null, remoteId)
-            fileForKey(legacyKey).delete()
-            File(root, opaqueName(legacyKey) + ".part").delete()
-            cancelFlags.remove(legacyKey)
-        }
+        // A source-aware delete must never remove a remoteId-only legacy file:
+        // its source ownership is unknown and it may belong to another source.
+    }
+
+    /**
+     * Deletes only a file whose source identity is known. Returns false when either
+     * exact file cannot be removed, allowing the repository to retain its local URI.
+     * A null/blank source is deliberately rejected because it aliases legacy storage.
+     */
+    fun deleteExact(sourceId: String, remoteId: String): Boolean {
+        require(sourceId.isNotBlank()) { "A source identity is required for exact deletion" }
+        val key = storageKey(sourceId, remoteId)
+        cancelFlags.getOrPut(key) { AtomicBoolean(false) }.set(true)
+
+        val partial = File(root, opaqueName(key) + ".part")
+        if (partial.exists() && !partial.delete()) return false
+
+        val target = fileForKey(key)
+        if (target.exists() && !target.delete()) return false
+
+        cancelFlags.remove(key)
+        return !target.exists() && !partial.exists()
     }
 
     fun cancel(remoteId: String) =
