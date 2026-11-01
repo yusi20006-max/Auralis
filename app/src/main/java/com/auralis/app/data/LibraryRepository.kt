@@ -207,7 +207,7 @@ class LibraryRepository internal constructor(
                 }
                 upsertDownloaded(catalogEpisode, podcast, url, fileUri, identity)
             } catch (_: DownloadCancelledException) {
-                _downloadErrors.value = _downloadErrors.value - identity
+                _downloadErrors.update { it - identity }
                 null
             } catch (_: InsufficientSpaceException) {
                 _downloadErrors.update { it +
