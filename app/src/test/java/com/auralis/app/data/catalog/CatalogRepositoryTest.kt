@@ -51,6 +51,12 @@ class CatalogRepositoryTest {
     }
 
     @Test
+    fun defaultCatalogUrlPointsAtHostedJson() {
+        assertTrue(CatalogConfig.catalogUrl.contains("catalog.json"))
+        assertTrue(CatalogConfig.catalogUrl.startsWith("https://"))
+    }
+
+    @Test
     fun resolveAudioUrlKeepsAbsoluteHttps() {
         val absolute = "https://example.com/a.mp3"
         assertEquals(absolute, CatalogConfig.resolveAudioUrl(absolute))

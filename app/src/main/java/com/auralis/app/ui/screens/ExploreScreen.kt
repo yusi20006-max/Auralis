@@ -24,6 +24,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +65,11 @@ fun ExploreScreen(
     val podcasts by catalogRepository.observePodcasts(selectedCategory)
         .collectAsState(initial = emptyList())
 
+    // P3: pull hosted catalog; sample data remains until success.
+    LaunchedEffect(catalogRepository) {
+        catalogRepository.refresh()
+    }
+
     val podcast = selectedPodcast
     if (podcast != null) {
         BackHandler { selectedPodcast = null }
@@ -91,11 +97,17 @@ fun ExploreScreen(
     ) {
         item {
             Text(
-                text = "کشف",
+                text = "کاوش",
                 color = AuralisColors.TextPrimary,
                 fontSize = AuralisTypeScale.TitleLargeMax,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(vertical = AuralisSpacing.X4),
+            )
+            Text(
+                text = "پادکست‌های AI · استریم یا دانلود",
+                color = AuralisColors.TextSecondary,
+                fontSize = AuralisTypeScale.Caption,
+                modifier = Modifier.padding(bottom = AuralisSpacing.X4),
             )
         }
 
@@ -107,44 +119,25 @@ fun ExploreScreen(
                 horizontalArrangement = Arrangement.spacedBy(AuralisSpacing.X2),
             ) {
                 categories.forEach { category ->
-                    val selected = category == selectedCategory
+                    val selected = selectedCategory == category
                     FilterChip(
                         selected = selected,
                         onClick = { selectedCategory = category },
-                        label = {
-                            Text(text = category, fontSize = AuralisTypeScale.Caption)
-                        },
+                        label = { Text(category) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = AuralisColors.PrimaryBlue,
-                            selectedLabelColor = AuralisColors.BackgroundDeep,
-                            containerColor = AuralisColors.SurfaceElevated,
+                            selectedLabelColor = AuralisColors.TextPrimary,
+                            containerColor = AuralisColors.Surface,
                             labelColor = AuralisColors.TextSecondary,
                         ),
-                        shape = RoundedCornerShape(AuralisCorners.Button),
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(AuralisSpacing.X6))
-        }
-
-        item {
-            Text(
-                text = "کاتالوگ AI",
-                color = AuralisColors.TextPrimary,
-                fontSize = AuralisTypeScale.TitleMediumMin,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(modifier = Modifier.height(AuralisSpacing.X2))
-            Text(
-                text = "پخش آنلاین یا دانلود خصوصی (مخفی از مدیریت فایل).",
-                color = AuralisColors.TextTertiary,
-                fontSize = AuralisTypeScale.Caption,
-            )
-            Spacer(modifier = Modifier.height(AuralisSpacing.X3))
+            Spacer(modifier = Modifier.height(AuralisSpacing.X4))
         }
 
         items(podcasts, key = { it.id }) { item ->
-            CatalogPodcastRow(
+            PodcastCard(
                 podcast = item,
                 onClick = { selectedPodcast = item },
             )
@@ -153,53 +146,40 @@ fun ExploreScreen(
 
         item {
             Spacer(modifier = Modifier.height(AuralisSpacing.X4))
-            Text(
-                text = "شروع با فایل محلی",
-                color = AuralisColors.TextPrimary,
-                fontSize = AuralisTypeScale.TitleMediumMin,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(modifier = Modifier.height(AuralisSpacing.X3))
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(AuralisCorners.Card))
-                    .clickable(onClick = onImportClick),
+                onClick = onImportClick,
                 color = AuralisColors.Surface,
                 shape = RoundedCornerShape(AuralisCorners.Card),
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(
-                    modifier = Modifier.padding(AuralisSpacing.X4),
-                    horizontalAlignment = Alignment.Start,
-                ) {
+                Column(modifier = Modifier.padding(AuralisSpacing.X4)) {
                     Text(
-                        text = "افزودن پادکست از حافظه",
+                        text = "وارد کردن فایل صوتی",
                         color = AuralisColors.TextPrimary,
-                        fontSize = AuralisTypeScale.BodyLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "فایل‌های صوتی AI خود را وارد کنید و آفلاین گوش دهید",
+                        text = "از حافظه دستگاه",
                         color = AuralisColors.TextSecondary,
                         fontSize = AuralisTypeScale.Caption,
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(AuralisSpacing.X8))
         }
     }
 }
 
 @Composable
-private fun CatalogPodcastRow(
+private fun PodcastCard(
     podcast: CatalogPodcast,
     onClick: () -> Unit,
 ) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
         color = AuralisColors.Surface,
         shape = RoundedCornerShape(AuralisCorners.Card),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
             modifier = Modifier.padding(AuralisSpacing.X4),
@@ -209,7 +189,7 @@ private fun CatalogPodcastRow(
                 modifier = Modifier
                     .width(56.dp)
                     .height(56.dp)
-                    .clip(RoundedCornerShape(AuralisCorners.Artwork))
+                    .clip(RoundedCornerShape(AuralisCorners.Card))
                     .background(
                         Brush.linearGradient(
                             listOf(AuralisColors.PrimaryBlue, AuralisColors.PrimaryViolet),
@@ -217,14 +197,17 @@ private fun CatalogPodcastRow(
                     ),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("A", color = Color.White, fontWeight = FontWeight.Bold)
+                Text(
+                    text = podcast.title.take(1),
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                )
             }
             Spacer(modifier = Modifier.width(AuralisSpacing.X3))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = podcast.title,
                     color = AuralisColors.TextPrimary,
-                    fontSize = AuralisTypeScale.BodyLarge,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -236,14 +219,11 @@ private fun CatalogPodcastRow(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (podcast.isAiGenerated) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "AI Generated · ${podcast.episodeCount} اپیزود",
-                        color = AuralisColors.AccentCyan,
-                        fontSize = AuralisTypeScale.Overline,
-                    )
-                }
+                Text(
+                    text = "${podcast.episodeCount} قسمت · ${podcast.category}",
+                    color = AuralisColors.TextTertiary,
+                    fontSize = AuralisTypeScale.Caption,
+                )
             }
         }
     }
