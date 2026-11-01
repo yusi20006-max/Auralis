@@ -291,10 +291,17 @@ class LibraryRepository internal constructor(
             val sourceId = entity.sourceId?.takeIf { it.isNotBlank() } ?: return@launch
             val remoteId = entity.remoteId?.takeIf { it.isNotBlank() } ?: return@launch
 
-            // Null-source rows address ambiguous legacy storage; never delete those files.
-            // Keep the database URI unless the exact source-owned file is removed.
-            if (downloadStore.deleteExact(sourceId, remoteId)) {
-                dao.updateLocalUri(episodeId, null)
+            // Serialize explicit deletion with download/retry for the same identity.
+            // This prevents deletion from clearing a live cancellation flag or racing
+            // the final .part -> target rename.
+            val identity = DownloadIdentity(sourceId, remoteId)
+            val mutex = downloadMutexes.getOrPut(identity) { Mutex() }
+            mutex.withLock {
+                // Null-source rows address ambiguous legacy storage; never delete those files.
+                // Keep the database URI unless the exact source-owned file is removed.
+                if (downloadStore.deleteExact(identity)) {
+                    dao.updateLocalUri(episodeId, null)
+                }
             }
         }
     }
