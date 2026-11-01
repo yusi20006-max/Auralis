@@ -74,6 +74,26 @@ class PrivateDownloadStore(private val context: Context) {
         // its source ownership is unknown and it may belong to another source.
     }
 
+    /**
+     * Deletes only a file whose source identity is known. Returns false when either
+     * exact file cannot be removed, allowing the repository to retain its local URI.
+     * A null/blank source is deliberately rejected because it aliases legacy storage.
+     */
+    fun deleteExact(sourceId: String, remoteId: String): Boolean {
+        require(sourceId.isNotBlank()) { "A source identity is required for exact deletion" }
+        val key = storageKey(sourceId, remoteId)
+        cancelFlags.getOrPut(key) { AtomicBoolean(false) }.set(true)
+
+        val partial = File(root, opaqueName(key) + ".part")
+        if (partial.exists() && !partial.delete()) return false
+
+        val target = fileForKey(key)
+        if (target.exists() && !target.delete()) return false
+
+        cancelFlags.remove(key)
+        return !target.exists() && !partial.exists()
+    }
+
     fun cancel(remoteId: String) =
         cancel(sourceId = null, remoteId = remoteId)
 
