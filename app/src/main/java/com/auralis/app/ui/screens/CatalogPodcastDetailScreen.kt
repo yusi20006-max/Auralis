@@ -354,7 +354,7 @@ private fun EpisodeRow(
                 )
             }
 
-            Spacer(modifier = Modifier.height(AuralisSpacing.X1))
+            Spacer(modifier = Modifier.height(AuralisSpacing.Base))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(AuralisSpacing.X2),
