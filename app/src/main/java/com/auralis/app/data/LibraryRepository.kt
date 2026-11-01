@@ -70,19 +70,33 @@ class LibraryRepository internal constructor(
             artworkUri = artworkUri,
             localUri = uri,
             isAiGenerated = true,
+            sourceId = null,
         )
         // Room @Transaction: concurrent imports of the same URI cannot double-insert.
         return dao.getOrInsertLocalEpisode(EpisodeEntity.from(candidate)).toEpisode()
     }
 
+    /**
+     * Resolve an Episode for playback from the hosted catalog.
+     *
+     * - If a durable library row already exists for (SOURCE_ID, remoteId),
+     *   return it (and refresh audioUrl / attach private download URI when present).
+     * - Otherwise return an in-memory Episode suitable for streaming.
+     *   Play alone does **not** write a permanent Room membership.
+     *
+     * Permanent membership is created only by [addToLibrary] or [downloadEpisodeOffline].
+     */
     fun addOrGetStreamEpisode(
         catalogEpisode: CatalogEpisode,
         podcast: CatalogPodcast?,
     ): Episode {
+        val sourceId = CatalogConfig.SOURCE_ID
+        val remoteId = catalogEpisode.id
         val resolvedUrl = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
-        val existing = episodes.value.find { it.remoteId == catalogEpisode.id }
+
+        val existing = findCatalogEpisode(sourceId, remoteId)
         if (existing != null) {
-            val privateUri = downloadStore.uriForRemoteId(catalogEpisode.id)
+            val privateUri = downloadStore.uriForRemoteId(remoteId)
             if (privateUri != null && existing.localUri == null) {
                 scope.launch { dao.updateLocalUri(existing.id, privateUri.toString()) }
                 return existing.copy(localUri = privateUri, audioUrl = resolvedUrl)
@@ -90,20 +104,53 @@ class LibraryRepository internal constructor(
             return existing.copy(audioUrl = resolvedUrl)
         }
 
-        val privateUri = downloadStore.uriForRemoteId(catalogEpisode.id)
+        // Transient stream-only episode: no Room write.
+        val privateUri = downloadStore.uriForRemoteId(remoteId)
+        return Episode(
+            id = UUID.randomUUID().toString(),
+            title = catalogEpisode.title,
+            podcastName = podcast?.title ?: "Auralis",
+            description = catalogEpisode.description,
+            durationMs = catalogEpisode.durationMs,
+            remoteId = remoteId,
+            audioUrl = resolvedUrl,
+            localUri = privateUri,
+            isAiGenerated = catalogEpisode.isAiGenerated,
+            sourceId = sourceId,
+        )
+    }
+
+    /**
+     * Explicit permanent library membership for a catalog episode.
+     * Does not start a download.
+     */
+    suspend fun addToLibrary(
+        catalogEpisode: CatalogEpisode,
+        podcast: CatalogPodcast?,
+    ): Episode = withContext(Dispatchers.IO) {
+        val sourceId = CatalogConfig.SOURCE_ID
+        val remoteId = catalogEpisode.id
+        val resolvedUrl = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
+
+        findCatalogEpisode(sourceId, remoteId)?.let { existing ->
+            return@withContext existing.copy(audioUrl = resolvedUrl)
+        }
+
+        val privateUri = downloadStore.uriForRemoteId(remoteId)
         val episode = Episode(
             id = UUID.randomUUID().toString(),
             title = catalogEpisode.title,
             podcastName = podcast?.title ?: "Auralis",
             description = catalogEpisode.description,
             durationMs = catalogEpisode.durationMs,
-            remoteId = catalogEpisode.id,
+            remoteId = remoteId,
             audioUrl = resolvedUrl,
             localUri = privateUri,
             isAiGenerated = catalogEpisode.isAiGenerated,
+            sourceId = sourceId,
         )
-        scope.launch { dao.upsert(EpisodeEntity.from(episode)) }
-        return episode
+        dao.upsert(EpisodeEntity.from(episode))
+        episode
     }
 
     fun isDownloaded(remoteId: String): Boolean = downloadStore.hasLocalCopy(remoteId)
@@ -119,6 +166,7 @@ class LibraryRepository internal constructor(
     /**
      * Download into private storage. Safe to call again (retry).
      * Concurrent calls for the same remoteId are serialized.
+     * Creates durable library membership with [CatalogConfig.SOURCE_ID].
      */
     suspend fun downloadEpisodeOffline(
         catalogEpisode: CatalogEpisode,
@@ -172,28 +220,54 @@ class LibraryRepository internal constructor(
         url: String,
         fileUri: Uri,
     ): Episode {
-        val existing = dao.getByRemoteId(catalogEpisode.id)?.toEpisode()
+        val sourceId = CatalogConfig.SOURCE_ID
+        val remoteId = catalogEpisode.id
+
+        val existing = findCatalogEpisode(sourceId, remoteId)
         if (existing != null) {
             dao.updateLocalUri(existing.id, fileUri.toString())
             return existing.copy(localUri = fileUri, audioUrl = url)
         }
+
         val episode = Episode(
             id = UUID.randomUUID().toString(),
             title = catalogEpisode.title,
             podcastName = podcast?.title ?: "Auralis",
             description = catalogEpisode.description,
             durationMs = catalogEpisode.durationMs,
-            remoteId = catalogEpisode.id,
+            remoteId = remoteId,
             audioUrl = url,
             localUri = fileUri,
             isAiGenerated = catalogEpisode.isAiGenerated,
+            sourceId = sourceId,
         )
         dao.upsert(EpisodeEntity.from(episode))
         return episode
     }
 
+    /**
+     * Composite lookup for hosted catalog episodes.
+     * Does not fall back to guessing a source for legacy rows with matching remoteId only.
+     */
+    private fun findCatalogEpisode(sourceId: String, remoteId: String): Episode? {
+        // Prefer in-memory snapshot for non-suspending call sites (stream resolve).
+        val fromFlow = episodes.value.find {
+            it.sourceId == sourceId && it.remoteId == remoteId
+        }
+        if (fromFlow != null) return fromFlow
+        return null
+    }
+
+    private suspend fun findCatalogEpisodeSuspend(sourceId: String, remoteId: String): Episode? {
+        dao.getBySourceAndRemoteId(sourceId, remoteId)?.toEpisode()?.let { return it }
+        return episodes.value.find {
+            it.sourceId == sourceId && it.remoteId == remoteId
+        }
+    }
+
     fun updatePosition(episodeId: String, positionMs: Long) {
         scope.launch {
+            // Only durable rows are updated; transient stream-only ids are no-ops in DAO.
             dao.updatePosition(episodeId, positionMs, System.currentTimeMillis())
         }
     }
