@@ -46,11 +46,11 @@ object CatalogConfig {
             } else {
                 val base = baseUrl.trim()
                 if (base.isEmpty()) return null
-                val baseUri = URI(base)
+                val baseUri = URI(if (base.endsWith("/")) base else "$base/")
                 if (!baseUri.isAbsolute || baseUri.scheme !in HTTP_SCHEMES || baseUri.host.isNullOrBlank()) {
                     return null
                 }
-                baseUri.resolve(candidate)
+                baseUri.resolve(value.trimStart('/'))
             }
 
             if (resolved.scheme !in HTTP_SCHEMES || resolved.host.isNullOrBlank()) {
