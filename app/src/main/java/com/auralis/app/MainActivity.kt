@@ -313,12 +313,16 @@ class MainActivity : ComponentActivity() {
                 val playbackSpeed by playbackPreferences.speed.collectAsState()
                 val downloadingIdentities by libraryRepository.downloadingIdentities.collectAsState()
                 val downloadProgress by libraryRepository.downloadProgress.collectAsState()
+                val downloadErrors by libraryRepository.downloadErrors.collectAsState()
                 val lastDownloadError by libraryRepository.lastDownloadError.collectAsState()
-                val downloadedIdentities = episodes.mapNotNull { episode ->
+                val libraryIdentities = episodes.mapNotNull { episode ->
+                    val sourceId = episode.sourceId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                     val remoteId = episode.remoteId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    DownloadIdentity(episode.sourceId, remoteId)
-                        .takeIf(libraryRepository::isDownloaded)
+                    DownloadIdentity(sourceId, remoteId)
                 }.toSet()
+                val downloadedIdentities = libraryIdentities.filterTo(mutableSetOf()) {
+                    libraryRepository.isDownloaded(it)
+                }
                 val catalogSourceId = CatalogConfig.SOURCE_ID
 
                 BackHandler(enabled = showNowPlaying || showSettings) {
@@ -490,6 +494,17 @@ class MainActivity : ComponentActivity() {
                                                     downloadedIdentities = downloadedIdentities,
                                                     downloadingIdentities = downloadingIdentities,
                                                     downloadProgress = downloadProgress,
+                                                    downloadErrors = downloadErrors,
+                                                    libraryIdentities = libraryIdentities,
+                                                    isDownloaded = libraryRepository::isDownloaded,
+                                                    onAddToLibrary = { podcast, catalogEpisode ->
+                                                        libraryRepository.addToLibrary(catalogEpisode, podcast)
+                                                    },
+                                                    onRemoveFromLibrary = { _, catalogEpisode ->
+                                                        libraryRepository.removeFromLibrary(
+                                                            DownloadIdentity(catalogSourceId, catalogEpisode.id),
+                                                        )
+                                                    },
                                                     onStreamEpisode = { podcast, catalogEpisode ->
                                                         if (catalogEpisode.audioUrl.isBlank()) {
                                                             return@ExploreScreen
