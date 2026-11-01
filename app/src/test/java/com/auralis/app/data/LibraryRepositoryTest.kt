@@ -292,9 +292,9 @@ class LibraryRepositoryTest {
         assertTrue("both source identities should enter download concurrently", store.started!!.await(5, TimeUnit.SECONDS))
         val active = testRepository.downloadingIdentities.first { it.contains(first) && it.contains(second) }
         assertEquals(setOf(first, second), active)
-        val progress = testRepository.downloadProgress.first { it[first] == 0.4f && it[second] == 0.4f }
-        assertEquals(0.4f, progress[first]!!, 0.001f)
-        assertEquals(0.4f, progress[second]!!, 0.001f)
+        val progress = testRepository.downloadProgress.first { it[first] == 0.25f && it[second] == 0.75f }
+        assertEquals(0.25f, progress[first]!!, 0.001f)
+        assertEquals(0.75f, progress[second]!!, 0.001f)
 
         store.release!!.countDown()
         val firstEpisode = firstTask.await()
@@ -388,7 +388,7 @@ class LibraryRepositoryTest {
         override fun download(identity: DownloadIdentity, url: String, onProgress: ((Float) -> Unit)?): Uri {
             totalCalls.incrementAndGet()
             calls.computeIfAbsent(identity) { AtomicInteger() }.incrementAndGet()
-            onProgress?.invoke(0.4f)
+            onProgress?.invoke(if (identity.sourceId == "catalog:auralis") 0.25f else 0.75f)
             started?.countDown()
             if (release != null && !release.await(5, TimeUnit.SECONDS)) throw IOException("Timed out waiting for test release")
             if (cancelled.contains(identity)) throw DownloadCancelledException(identity.remoteId)
