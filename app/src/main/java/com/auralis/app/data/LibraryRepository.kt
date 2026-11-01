@@ -161,8 +161,26 @@ class LibraryRepository internal constructor(
     suspend fun downloadEpisodeOffline(
         catalogEpisode: CatalogEpisode,
         podcast: CatalogPodcast?,
+    ): Episode? = downloadEpisodeOffline(
+        DownloadIdentity(CatalogConfig.SOURCE_ID, catalogEpisode.id),
+        catalogEpisode,
+        podcast,
+    )
+
+    /** Downloads one remote episode under its explicit source identity. */
+    suspend fun downloadEpisodeOffline(
+        identity: DownloadIdentity,
+        catalogEpisode: CatalogEpisode,
+        podcast: CatalogPodcast?,
     ): Episode? = withContext(Dispatchers.IO) {
-        val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, catalogEpisode.id)
+        require(identity.remoteId == catalogEpisode.id) {
+            "Download identity remoteId must match the catalog episode"
+        }
+        if (!identity.isSourceAware) {
+            _downloadErrors.value = _downloadErrors.value +
+                (identity to "منبع دانلود مشخص نیست؛ فایل Legacy به‌صورت خودکار ساخته نمی‌شود.")
+            return@withContext null
+        }
         val url = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
         if (url.isBlank()) {
             _downloadErrors.value = _downloadErrors.value + (identity to "آدرس فایل خالی است.")
