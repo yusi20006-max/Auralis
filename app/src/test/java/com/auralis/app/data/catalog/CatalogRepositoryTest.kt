@@ -80,8 +80,9 @@ class CatalogRepositoryTest {
                     assertEquals(beforePodcasts, repository.observePodcasts().first())
                     assertEquals(beforeEpisodes, repository.observeEpisodes().first())
                     assertEquals(result, repository.loadState.value)
-                    assertFalse((result as CatalogLoadState.Error).message.contains("upstream detail"))
-                    assertFalse(result.message.contains("not-a-secret"))
+                    val error = result as CatalogLoadState.Error
+                    assertFalse(error.message.contains("upstream detail"))
+                    assertFalse(error.message.contains("not-a-secret"))
                 }
             }
         } finally {
