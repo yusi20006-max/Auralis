@@ -96,7 +96,7 @@ class LibraryRepository internal constructor(
             it.sourceId == sourceId && it.remoteId == remoteId
         }
         if (existing != null) {
-            val privateUri = downloadStore.uriForIdentity(sourceId, remoteId)
+            val privateUri = downloadStore.uriForIdentity(DownloadIdentity(sourceId, remoteId))
             if (privateUri != null && existing.localUri == null) {
                 scope.launch { dao.updateLocalUri(existing.id, privateUri.toString()) }
                 return existing.copy(localUri = privateUri, audioUrl = resolvedUrl)
@@ -309,7 +309,7 @@ class LibraryRepository internal constructor(
     /** Source-aware private download URI when a file exists for this episode identity. */
     fun privateDownloadUri(episode: Episode): Uri? {
         val remoteId = episode.remoteId?.takeIf { it.isNotBlank() } ?: return null
-        return downloadStore.uriForIdentity(episode.sourceId, remoteId)
+        return downloadStore.uriForIdentity(DownloadIdentity(episode.sourceId, remoteId))
     }
 
     fun setCurrentEpisode(id: String?) {
