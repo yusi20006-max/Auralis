@@ -549,4 +549,27 @@ class LibraryRepositoryTest {
 
 
 
+
+    @Test
+    fun removingMembershipWaitsForDownloadAndPreservesItsFinalUri() = runBlocking {
+        val store = RecordingDownloadStore(started = CountDownLatch(1), release = CountDownLatch(1))
+        val testRepository = LibraryRepository(database.episodeDao(), store, repositoryScope)
+        val added = testRepository.addToLibrary(sampleEpisode, samplePodcast)
+        val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, sampleEpisode.id)
+        val download = async(Dispatchers.IO) {
+            testRepository.downloadEpisodeOffline(identity, sampleEpisode, samplePodcast)
+        }
+
+        assertTrue(store.started!!.await(5, TimeUnit.SECONDS))
+        testRepository.deleteEpisode(added.id)
+        store.release!!.countDown()
+        assertNotNull(download.await())
+
+        val retained = database.episodeDao().observeAll().first { rows ->
+            rows.any { it.id == added.id && !it.isInLibrary && it.localUri != null }
+        }.single { it.id == added.id }
+        assertNotNull(retained.localUri)
+        assertFalse(retained.isInLibrary)
+        assertTrue(testRepository.isDownloaded(identity))
+    }
 }
