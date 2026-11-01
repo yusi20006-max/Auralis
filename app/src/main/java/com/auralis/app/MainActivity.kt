@@ -125,10 +125,15 @@ class MainActivity : ComponentActivity() {
 
     private fun playEpisode(episode: Episode) {
         val player = controller ?: return
-        val uri = LocalUriAccess.resolvePlayableUri(this, episode)
+        val privateDownloadUri = libraryRepository.privateDownloadUri(episode)
+        val uri = LocalUriAccess.resolvePlayableUri(
+            this,
+            episode,
+            privateDownloadUri = privateDownloadUri,
+        )
         if (uri == null) {
             hasPlayerError = true
-            playerErrorMessage = if (episode.localUri != null) {
+            playerErrorMessage = if (episode.localUri != null || privateDownloadUri != null) {
                 LocalUriAccess.unreadableLocalMessage()
             } else {
                 LocalUriAccess.noSourceMessage()
@@ -394,7 +399,7 @@ class MainActivity : ComponentActivity() {
                                                         color = navIconColor(currentDestination == AuralisDestination.Explore),
                                                     )
                                                 },
-                                                label = { Text("کشف", fontSize = AuralisTypeScale.Caption) },
+                                                label = { Text("کاوش", fontSize = AuralisTypeScale.Caption) },
                                                 colors = navColors(),
                                             )
                                             NavigationBarItem(
@@ -412,78 +417,85 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                             ) { padding ->
-                                Column(Modifier.padding(padding).fillMaxSize()) {
-                                    if (hasPlayerError || lastDownloadError != null) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(padding),
+                                ) {
+                                    if (hasPlayerError && playerErrorMessage != null) {
                                         AuralisErrorBanner(
-                                            message = playerErrorMessage
-                                                ?: lastDownloadError
-                                                ?: "پخش یا دانلود ممکن نشد. اتصال یا فایل را بررسی کنید.",
-                                            actionLabel = "باشه",
-                                            onAction = {
+                                            message = playerErrorMessage!!,
+                                            onDismiss = {
                                                 hasPlayerError = false
                                                 playerErrorMessage = null
-                                                libraryRepository.clearDownloadError()
                                             },
-                                            modifier = Modifier.padding(
-                                                horizontal = AuralisSpacing.X4,
-                                                vertical = AuralisSpacing.X2,
-                                            ),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = AuralisSpacing.X4, vertical = AuralisSpacing.X2),
                                         )
                                     }
-                                    Box(Modifier.fillMaxSize()) {
-                                        when (currentDestination) {
-                                            AuralisDestination.Library,
-                                            AuralisDestination.NowPlaying,
-                                            AuralisDestination.EpisodeDetail -> {
-                                                LibraryScreen(
-                                                    episodes = episodes,
-                                                    onEpisodeClick = { episode ->
-                                                        libraryRepository.setCurrentEpisode(episode.id)
-                                                        playEpisode(episode)
-                                                        showNowPlaying = true
-                                                    },
-                                                    onEpisodeDelete = { episode ->
-                                                        libraryRepository.deleteEpisode(episode.id)
-                                                    },
-                                                    onImportClick = { openAudio.launch(arrayOf("audio/*")) },
-                                                )
-                                            }
-                                            AuralisDestination.Explore -> {
-                                                ExploreScreen(
-                                                    onImportClick = { openAudio.launch(arrayOf("audio/*")) },
-                                                    downloadedRemoteIds = downloadedRemoteIds,
-                                                    downloadingRemoteIds = downloadingRemoteIds,
-                                                    downloadProgress = downloadProgress,
-                                                    onStreamEpisode = { podcast, catalogEpisode ->
-                                                        if (catalogEpisode.audioUrl.isBlank()) return@ExploreScreen
-                                                        val episode = libraryRepository.addOrGetStreamEpisode(
-                                                            catalogEpisode = catalogEpisode,
-                                                            podcast = podcast,
+                                    if (lastDownloadError != null) {
+                                        AuralisErrorBanner(
+                                            message = lastDownloadError!!,
+                                            onDismiss = { libraryRepository.clearDownloadError() },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = AuralisSpacing.X4, vertical = AuralisSpacing.X2),
+                                        )
+                                    }
+                                    when (currentDestination) {
+                                        AuralisDestination.Library -> {
+                                            LibraryScreen(
+                                                episodes = episodes,
+                                                currentEpisodeId = currentEpisodeId,
+                                                isPlaying = isPlaying,
+                                                onPlayEpisode = { episode ->
+                                                    playEpisode(episode)
+                                                },
+                                                onDeleteEpisode = { id -> libraryRepository.deleteEpisode(id) },
+                                                onImportClick = {
+                                                    openAudio.launch(arrayOf("audio/*"))
+                                                },
+                                                onOpenSettings = { showSettings = true },
+                                            )
+                                        }
+                                        AuralisDestination.Explore -> {
+                                            ExploreScreen(
+                                                downloadingRemoteIds = downloadingRemoteIds,
+                                                downloadProgress = downloadProgress,
+                                                downloadedRemoteIds = downloadedRemoteIds,
+                                                onPlayCatalogEpisode = { catalogEpisode, podcast ->
+                                                    val episode = libraryRepository.addOrGetStreamEpisode(
+                                                        catalogEpisode,
+                                                        podcast,
+                                                    )
+                                                    playEpisode(episode)
+                                                },
+                                                onDownloadCatalogEpisode = { catalogEpisode, podcast ->
+                                                    lifecycleScope.launch {
+                                                        libraryRepository.downloadEpisodeOffline(
+                                                            catalogEpisode,
+                                                            podcast,
                                                         )
-                                                        libraryRepository.setCurrentEpisode(episode.id)
-                                                        playEpisode(episode)
-                                                        showNowPlaying = true
-                                                    },
-                                                    onDownloadEpisode = { podcast, catalogEpisode ->
-                                                        if (catalogEpisode.audioUrl.isBlank()) return@ExploreScreen
-                                                        lifecycleScope.launch {
-                                                            libraryRepository.downloadEpisodeOffline(
-                                                                catalogEpisode = catalogEpisode,
-                                                                podcast = podcast,
-                                                            )
-                                                        }
-                                                    },
-                                                    onCancelDownload = { _, catalogEpisode ->
-                                                        libraryRepository.cancelDownload(catalogEpisode.id)
-                                                    },
-                                                )
-                                            }
-                                            AuralisDestination.Profile -> {
-                                                ProfileScreen(
-                                                    episodeCount = episodes.size,
-                                                    onOpenSettings = { showSettings = true },
-                                                )
-                                            }
+                                                    }
+                                                },
+                                                onCancelDownload = { remoteId ->
+                                                    libraryRepository.cancelDownload(remoteId)
+                                                },
+                                                onAddToLibrary = { catalogEpisode, podcast ->
+                                                    lifecycleScope.launch {
+                                                        libraryRepository.addToLibrary(
+                                                            catalogEpisode,
+                                                            podcast,
+                                                        )
+                                                    }
+                                                },
+                                            )
+                                        }
+                                        AuralisDestination.Profile -> {
+                                            ProfileScreen(
+                                                onOpenSettings = { showSettings = true },
+                                            )
                                         }
                                     }
                                 }
@@ -495,23 +507,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun navIconColor(selected: Boolean): Color =
+        if (selected) AuralisColors.Primary else AuralisColors.TextMuted
+
+    @Composable
+    private fun navColors() = NavigationBarItemDefaults.colors(
+        selectedIconColor = AuralisColors.Primary,
+        selectedTextColor = AuralisColors.Primary,
+        unselectedIconColor = AuralisColors.TextMuted,
+        unselectedTextColor = AuralisColors.TextMuted,
+        indicatorColor = AuralisColors.Primary.copy(alpha = 0.12f),
+    )
+
     override fun onDestroy() {
-        controller?.release()
-        controller = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
+        controller = null
         controllerFuture = null
         super.onDestroy()
     }
 }
-
-private fun navIconColor(selected: Boolean): Color =
-    if (selected) AuralisColors.PrimaryBlue else AuralisColors.TextTertiary
-
-@Composable
-private fun navColors() = NavigationBarItemDefaults.colors(
-    selectedIconColor = AuralisColors.PrimaryBlue,
-    selectedTextColor = AuralisColors.PrimaryBlue,
-    indicatorColor = AuralisColors.SurfaceElevated,
-    unselectedIconColor = AuralisColors.TextTertiary,
-    unselectedTextColor = AuralisColors.TextTertiary,
-)
