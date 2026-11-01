@@ -128,9 +128,13 @@ class LibraryRepository internal constructor(
         val mutex = downloadMutexes.getOrPut(identity) { Mutex() }
 
         mutex.withLock {
-            findCatalogEpisodeSuspend(identity.sourceId!!, identity.remoteId)?.let { existing ->
-                return@withLock existing.copy(audioUrl = resolvedUrl)
-            }
+            // Room is authoritative here. The observed StateFlow can briefly retain
+            // a just-deleted row while its invalidation emission is still pending.
+            dao.getBySourceAndRemoteId(identity.sourceId!!, identity.remoteId)
+                ?.toEpisode()
+                ?.let { existing ->
+                    return@withLock existing.copy(audioUrl = resolvedUrl)
+                }
 
             val privateUri = downloadStore.uriForIdentity(identity)
             val episode = Episode(
