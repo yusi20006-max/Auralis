@@ -216,9 +216,23 @@ class PrivateDownloadStore(private val context: Context) {
     private fun fileForKey(key: String): File =
         File(root, opaqueName(key))
 
+    /**
+     * Prefer FileProvider content URIs for cross-component safety.
+     * Fall back to file:// when the provider is unavailable (misconfigured paths
+     * or limited unit-test environments) so local playback still works in-process.
+     */
     private fun contentUri(file: File): Uri {
-        val authority = context.packageName + ".fileprovider"
-        return FileProvider.getUriForFile(context, authority, file)
+        val canonical = try {
+            file.canonicalFile
+        } catch (_: Exception) {
+            file.absoluteFile
+        }
+        return try {
+            val authority = context.packageName + ".fileprovider"
+            FileProvider.getUriForFile(context, authority, canonical)
+        } catch (_: IllegalArgumentException) {
+            Uri.fromFile(canonical)
+        }
     }
 
     companion object {

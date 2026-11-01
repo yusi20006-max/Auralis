@@ -96,10 +96,11 @@ class PrivateDownloadStoreTest {
         try {
             assertTrue(store.hasLocalCopy("catalog:auralis", remoteId))
             assertTrue(store.hasLocalCopy("rss:feed-1", remoteId))
-            assertNotEquals(
-                store.uriForIdentity("catalog:auralis", remoteId),
-                store.uriForIdentity("rss:feed-1", remoteId),
-            )
+            val catalogUri = store.uriForIdentity("catalog:auralis", remoteId)
+            val rssUri = store.uriForIdentity("rss:feed-1", remoteId)
+            assertNotNull(catalogUri)
+            assertNotNull(rssUri)
+            assertNotEquals(catalogUri, rssUri)
         } finally {
             store.delete("catalog:auralis", remoteId)
             store.delete("rss:feed-1", remoteId)
@@ -110,11 +111,18 @@ class PrivateDownloadStoreTest {
     fun identityLookupFallsBackToLegacyRemoteIdOnlyFile() {
         val remoteId = "legacy-file-${System.nanoTime()}"
         val legacy = store.fileForRemoteId(remoteId)
+        val primary = store.fileForIdentity("catalog:auralis", remoteId)
         legacy.parentFile?.mkdirs()
         legacy.writeBytes(ByteArray(128) { 9 })
         try {
+            assertFalse("primary composite path must not exist yet", primary.exists())
+            assertTrue(legacy.isFile && legacy.length() > 64)
             assertTrue(store.hasLocalCopy("catalog:auralis", remoteId))
-            assertNotNull(store.uriForIdentity("catalog:auralis", remoteId))
+            val uri = store.uriForIdentity("catalog:auralis", remoteId)
+            assertNotNull("legacy file must resolve to a playable URI", uri)
+            assertTrue(
+                uri!!.scheme == "content" || uri.scheme == "file",
+            )
         } finally {
             store.delete("catalog:auralis", remoteId)
         }
