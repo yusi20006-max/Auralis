@@ -293,8 +293,8 @@ class LibraryRepositoryTest {
         val active = testRepository.downloadingIdentities.first { it.contains(first) && it.contains(second) }
         assertEquals(setOf(first, second), active)
         val progress = testRepository.downloadProgress.first { it[first] == 0.4f && it[second] == 0.4f }
-        assertEquals(0.4f, progress[first]!!)
-        assertEquals(0.4f, progress[second]!!)
+        assertEquals(0.4f, progress[first]!!, 0.001f)
+        assertEquals(0.4f, progress[second]!!, 0.001f)
 
         store.release!!.countDown()
         val firstEpisode = firstTask.await()
