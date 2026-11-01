@@ -308,16 +308,23 @@ class MainActivity : ComponentActivity() {
         setContent {
             AuralisTheme {
                 val episodes by libraryRepository.episodes.collectAsState()
+                val libraryEpisodes by libraryRepository.libraryEpisodes.collectAsState()
                 val currentEpisodeId by libraryRepository.currentEpisodeId.collectAsState()
                 val currentEpisode = episodes.find { it.id == currentEpisodeId }
                 val playbackSpeed by playbackPreferences.speed.collectAsState()
                 val downloadingIdentities by libraryRepository.downloadingIdentities.collectAsState()
                 val downloadProgress by libraryRepository.downloadProgress.collectAsState()
+                val downloadErrors by libraryRepository.downloadErrors.collectAsState()
                 val lastDownloadError by libraryRepository.lastDownloadError.collectAsState()
-                val downloadedIdentities = episodes.mapNotNull { episode ->
+                val libraryIdentities = libraryEpisodes.mapNotNull { episode ->
+                    val sourceId = episode.sourceId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                     val remoteId = episode.remoteId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    DownloadIdentity(episode.sourceId, remoteId)
-                        .takeIf(libraryRepository::isDownloaded)
+                    DownloadIdentity(sourceId, remoteId)
+                }.toSet()
+                val downloadedIdentities = episodes.mapNotNull { episode ->
+                    val sourceId = episode.sourceId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    val remoteId = episode.remoteId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    DownloadIdentity(sourceId, remoteId).takeIf(libraryRepository::isDownloaded)
                 }.toSet()
                 val catalogSourceId = CatalogConfig.SOURCE_ID
 
@@ -468,7 +475,7 @@ class MainActivity : ComponentActivity() {
                                             AuralisDestination.NowPlaying,
                                             AuralisDestination.EpisodeDetail -> {
                                                 LibraryScreen(
-                                                    episodes = episodes,
+                                                    episodes = libraryEpisodes,
                                                     onEpisodeClick = { episode ->
                                                         libraryRepository.setCurrentEpisode(episode.id)
                                                         playEpisode(episode)
@@ -490,10 +497,18 @@ class MainActivity : ComponentActivity() {
                                                     downloadedIdentities = downloadedIdentities,
                                                     downloadingIdentities = downloadingIdentities,
                                                     downloadProgress = downloadProgress,
+                                                    downloadErrors = downloadErrors,
+                                                    libraryIdentities = libraryIdentities,
+                                                    isDownloaded = libraryRepository::isDownloaded,
+                                                    onAddToLibrary = { podcast, catalogEpisode ->
+                                                        libraryRepository.addToLibrary(catalogEpisode, podcast)
+                                                    },
+                                                    onRemoveFromLibrary = { _, catalogEpisode ->
+                                                        libraryRepository.removeFromLibrary(
+                                                            DownloadIdentity(catalogSourceId, catalogEpisode.id),
+                                                        )
+                                                    },
                                                     onStreamEpisode = { podcast, catalogEpisode ->
-                                                        if (catalogEpisode.audioUrl.isBlank()) {
-                                                            return@ExploreScreen
-                                                        }
                                                         val episode = libraryRepository.addOrGetStreamEpisode(
                                                             catalogEpisode,
                                                             podcast,

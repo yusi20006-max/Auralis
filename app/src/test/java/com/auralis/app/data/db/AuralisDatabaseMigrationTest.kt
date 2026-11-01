@@ -37,7 +37,7 @@ class AuralisDatabaseMigrationTest {
                 AuralisDatabase::class.java,
                 databaseName,
             )
-                .addMigrations(AuralisDatabase.MIGRATION_1_2)
+                .addMigrations(AuralisDatabase.MIGRATION_1_2, AuralisDatabase.MIGRATION_2_3)
                 .allowMainThreadQueries()
                 .build()
 
@@ -50,10 +50,12 @@ class AuralisDatabaseMigrationTest {
                 assertEquals("content://media/local-1", local.localUri)
                 assertNull(local.remoteId)
                 assertNull(local.sourceId)
+                assertEquals(true, local.isInLibrary)
 
                 assertEquals("legacy-remote-1", legacy.remoteId)
                 assertEquals("https://example.com/legacy.mp3", legacy.audioUrl)
                 assertNull(legacy.sourceId)
+                assertEquals(true, legacy.isInLibrary)
 
                 assertEquals("download-remote-1", downloaded.remoteId)
                 assertEquals("content://auralis/downloads/downloaded-1", downloaded.localUri)
@@ -61,6 +63,7 @@ class AuralisDatabaseMigrationTest {
                 assertEquals(1_700_000_000_123L, downloaded.lastPlayedAt)
                 assertEquals("Downloaded episode", downloaded.title)
                 assertNull(downloaded.sourceId)
+                assertEquals(true, downloaded.isInLibrary)
             } finally {
                 migrated.close()
             }
@@ -79,6 +82,7 @@ class AuralisDatabaseMigrationTest {
                 assertEquals(42_000L, restored.lastPositionMs)
                 assertEquals(1_700_000_000_123L, restored.lastPlayedAt)
                 assertNull(restored.sourceId)
+                assertEquals(true, restored.isInLibrary)
             } finally {
                 reopened.close()
             }

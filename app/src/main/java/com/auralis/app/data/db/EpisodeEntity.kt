@@ -24,6 +24,7 @@ data class EpisodeEntity(
     val lastPositionMs: Long = 0L,
     val lastPlayedAt: Long? = null,
     val sourceId: String? = null,
+    val isInLibrary: Boolean = true,
 ) {
     fun toEpisode(): Episode = Episode(
         id = id,
@@ -39,6 +40,7 @@ data class EpisodeEntity(
         lastPositionMs = lastPositionMs,
         lastPlayedAt = lastPlayedAt,
         sourceId = sourceId,
+        isInLibrary = isInLibrary,
     )
 
     companion object {
@@ -56,6 +58,7 @@ data class EpisodeEntity(
             lastPositionMs = episode.lastPositionMs,
             lastPlayedAt = episode.lastPlayedAt,
             sourceId = episode.sourceId,
+            isInLibrary = episode.isInLibrary,
         )
     }
 }

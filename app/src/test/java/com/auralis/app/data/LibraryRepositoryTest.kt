@@ -155,7 +155,11 @@ class LibraryRepositoryTest {
         )
 
         repository.deleteEpisode(episodeId)
-        database.episodeDao().observeAll().first { rows -> rows.none { it.id == episodeId } }
+        val retainedRows = database.episodeDao().observeAll().first { rows ->
+            rows.any { it.id == episodeId && !it.isInLibrary }
+        }
+        assertEquals(1, retainedRows.size)
+        assertTrue(repository.libraryEpisodes.first { rows -> rows.none { it.id == episodeId } }.isEmpty())
 
         assertTrue("removing Library membership must preserve the offline file", file.isFile)
         assertTrue(file.length() > 64L)
@@ -217,6 +221,135 @@ class LibraryRepositoryTest {
         assertNotNull(row)
         legacyFile.delete()
         Unit
+    }
+
+    @Test
+    fun removeFromLibraryPreservesExactPrivateDownloadAndDownloadedStatus() = runBlocking {
+        val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, sampleEpisode.id)
+        val file = repositoryDownloadStoreFile(identity.sourceId!!, identity.remoteId)
+        file.parentFile?.mkdirs()
+        file.writeBytes(ByteArray(256) { 11 })
+        val added = repository.addToLibrary(sampleEpisode, samplePodcast)
+        assertNotNull(added.localUri)
+
+        assertTrue(repository.removeFromLibrary(identity))
+
+        val removed = database.episodeDao().getBySourceAndRemoteId(identity.sourceId, identity.remoteId)
+        assertNotNull(removed)
+        assertEquals(false, removed?.isInLibrary)
+        assertTrue(repository.libraryEpisodes.first { rows -> rows.none { it.remoteId == identity.remoteId } }.isEmpty())
+        assertTrue("removing Library membership must not delete the private file", file.isFile)
+        assertTrue(repository.isDownloaded(identity))
+
+        val reAdded = repository.addToLibrary(sampleEpisode, samplePodcast)
+        assertNotNull(reAdded.localUri)
+        assertEquals(added.id, reAdded.id)
+        assertEquals(true, database.episodeDao().getBySourceAndRemoteId(identity.sourceId, identity.remoteId)?.isInLibrary)
+        assertTrue("re-adding membership must reuse the existing private file", file.isFile)
+        file.delete()
+        Unit
+    }
+
+    @Test
+    fun concurrentAddToLibraryRequestsCreateExactlyOneDurableMembership() = runBlocking {
+        val results = (1..12).map {
+            async(Dispatchers.IO) { repository.addToLibrary(sampleEpisode, samplePodcast) }
+        }.map { it.await() }
+
+        assertEquals(1, results.map { it.id }.toSet().size)
+        val rows = database.episodeDao().observeAll().first()
+        assertEquals(1, rows.count {
+            it.sourceId == CatalogConfig.SOURCE_ID && it.remoteId == sampleEpisode.id
+        })
+    }
+
+    @Test
+    fun downloadCreatesNonMemberRecordWithoutPriorAddAction() = runBlocking {
+        val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, sampleEpisode.id)
+        val store = RecordingDownloadStore()
+        val testRepository = LibraryRepository(database.episodeDao(), store, repositoryScope)
+
+        val downloaded = testRepository.downloadEpisodeOffline(identity, sampleEpisode, samplePodcast)
+
+        assertNotNull(downloaded)
+        assertTrue(store.completed.contains(identity))
+        val row = database.episodeDao().getBySourceAndRemoteId(identity.sourceId!!, identity.remoteId)
+        assertNotNull(row)
+        assertNotNull(row?.localUri)
+        assertEquals(false, row?.isInLibrary)
+        assertTrue(testRepository.libraryEpisodes.first().isEmpty())
+        assertEquals(1, database.episodeDao().observeAll().first().size)
+    }
+
+    @Test
+    fun downloadOnlyEpisodeCanBeAddedAndRemovedWithoutLosingItsFile() = runBlocking {
+        val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, sampleEpisode.id)
+        val store = RecordingDownloadStore()
+        val testRepository = LibraryRepository(database.episodeDao(), store, repositoryScope)
+
+        val downloaded = testRepository.downloadEpisodeOffline(identity, sampleEpisode, samplePodcast)
+        assertNotNull(downloaded)
+        assertEquals(false, database.episodeDao().getBySourceAndRemoteId(identity.sourceId!!, identity.remoteId)?.isInLibrary)
+        assertTrue(testRepository.libraryEpisodes.first().isEmpty())
+
+        val added = testRepository.addToLibrary(sampleEpisode, samplePodcast)
+        assertEquals(downloaded?.id, added.id)
+        assertEquals(true, added.isInLibrary)
+        assertEquals(1, testRepository.libraryEpisodes.first { it.any { member -> member.id == added.id } }.size)
+
+        assertTrue(testRepository.removeFromLibrary(identity))
+        val retained = database.episodeDao().getBySourceAndRemoteId(identity.sourceId, identity.remoteId)
+        assertNotNull(retained)
+        assertEquals(false, retained?.isInLibrary)
+        assertTrue(testRepository.isDownloaded(identity))
+        val playable = testRepository.addOrGetStreamEpisode(sampleEpisode, samplePodcast)
+        assertNotNull(playable.localUri)
+        assertTrue(testRepository.libraryEpisodes.first { it.none { member -> member.id == added.id } }.isEmpty())
+    }
+
+    @Test
+    fun explicitLibraryMembershipSurvivesDatabaseRestart() = runBlocking {
+        val databaseName = "catalog-library-restart-" + System.nanoTime() + ".db"
+        val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, sampleEpisode.id)
+        val persistentScope = kotlinx.coroutines.CoroutineScope(
+            SupervisorJob() + Dispatchers.Unconfined,
+        )
+        val firstDatabase = Room.databaseBuilder(
+            context,
+            AuralisDatabase::class.java,
+            databaseName,
+        ).allowMainThreadQueries().build()
+
+        try {
+            val persistentRepository = LibraryRepository(
+                firstDatabase.episodeDao(),
+                PrivateDownloadStore(context),
+                persistentScope,
+            )
+            val added = persistentRepository.addToLibrary(sampleEpisode, samplePodcast)
+            assertNotNull(firstDatabase.episodeDao().getById(added.id))
+            firstDatabase.close()
+
+            val reopenedDatabase = Room.databaseBuilder(
+                context,
+                AuralisDatabase::class.java,
+                databaseName,
+            ).allowMainThreadQueries().build()
+            try {
+                val restored = reopenedDatabase.episodeDao().getBySourceAndRemoteId(
+                    identity.sourceId!!,
+                    identity.remoteId,
+                )
+                assertNotNull(restored)
+                assertEquals(added.id, restored?.id)
+            } finally {
+                reopenedDatabase.close()
+            }
+        } finally {
+            runCatching { firstDatabase.close() }
+            persistentScope.cancel()
+            context.deleteDatabase(databaseName)
+        }
     }
 
     @Test
@@ -414,4 +547,48 @@ class LibraryRepositoryTest {
         assertTrue(testRepository.downloadingIdentities.value.isEmpty())
     }
 
+
+
+
+    @Test
+    fun removingMembershipWaitsForDownloadAndPreservesItsFinalUri() = runBlocking {
+        val store = RecordingDownloadStore(started = CountDownLatch(1), release = CountDownLatch(1))
+        val testRepository = LibraryRepository(database.episodeDao(), store, repositoryScope)
+        val added = testRepository.addToLibrary(sampleEpisode, samplePodcast)
+        val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, sampleEpisode.id)
+        val download = async(Dispatchers.IO) {
+            testRepository.downloadEpisodeOffline(identity, sampleEpisode, samplePodcast)
+        }
+
+        assertTrue(store.started!!.await(5, TimeUnit.SECONDS))
+        testRepository.deleteEpisode(added.id)
+        store.release!!.countDown()
+        assertNotNull(download.await())
+
+        val retained = database.episodeDao().observeAll().first { rows ->
+            rows.any { it.id == added.id && !it.isInLibrary && it.localUri != null }
+        }.single { it.id == added.id }
+        assertNotNull(retained.localUri)
+        assertFalse(retained.isInLibrary)
+        assertTrue(testRepository.isDownloaded(identity))
+    }
+
+    @Test
+    fun reimportingRemovedLocalEpisodeRestoresMembershipWithoutDuplicate() = runBlocking {
+        val uri = Uri.parse("content://media/audio/reimport-regression")
+        val first = repository.addLocalEpisode(uri, "Original local episode")
+        repository.deleteEpisode(first.id)
+
+        database.episodeDao().observeAll().first { rows ->
+            rows.any { it.id == first.id && !it.isInLibrary }
+        }
+
+        val reimported = repository.addLocalEpisode(uri, "Reimported local episode")
+        assertEquals(first.id, reimported.id)
+        assertTrue(reimported.isInLibrary)
+        val rows = database.episodeDao().observeAll().first { it.any { row -> row.id == first.id && row.isInLibrary } }
+        assertEquals(1, rows.count { it.localUri == uri.toString() })
+        assertTrue(repository.libraryEpisodes.first { members -> members.any { it.id == first.id } }
+            .any { it.id == first.id })
+    }
 }

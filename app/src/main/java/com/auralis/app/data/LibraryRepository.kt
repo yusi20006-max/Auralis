@@ -45,6 +45,11 @@ class LibraryRepository internal constructor(
         .map { list -> list.map { it.toEpisode() } }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Only explicit members are rendered in Library; download-only records remain addressable. */
+    val libraryEpisodes: StateFlow<List<Episode>> = episodes
+        .map { list -> list.filter { it.isInLibrary } }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     private val _currentEpisodeId = MutableStateFlow<String?>(null)
     val currentEpisodeId: StateFlow<String?> = _currentEpisodeId.asStateFlow()
 
@@ -116,6 +121,7 @@ class LibraryRepository internal constructor(
             localUri = privateUri,
             isAiGenerated = catalogEpisode.isAiGenerated,
             sourceId = sourceId,
+            isInLibrary = false,
         )
     }
 
@@ -123,29 +129,54 @@ class LibraryRepository internal constructor(
         catalogEpisode: CatalogEpisode,
         podcast: CatalogPodcast?,
     ): Episode = withContext(Dispatchers.IO) {
-        val sourceId = CatalogConfig.SOURCE_ID
-        val remoteId = catalogEpisode.id
+        val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, catalogEpisode.id)
         val resolvedUrl = CatalogConfig.resolveAudioUrl(catalogEpisode.audioUrl)
+        val mutex = downloadMutexes.getOrPut(identity) { Mutex() }
 
-        findCatalogEpisodeSuspend(sourceId, remoteId)?.let { existing ->
-            return@withContext existing.copy(audioUrl = resolvedUrl)
+        mutex.withLock {
+            // Room is authoritative here. The observed StateFlow can briefly retain
+            // a just-deleted row while its invalidation emission is still pending.
+            dao.getBySourceAndRemoteId(identity.sourceId!!, identity.remoteId)
+                ?.let { existing ->
+                    val member = existing.copy(audioUrl = resolvedUrl, isInLibrary = true)
+                    if (member != existing) dao.upsert(member)
+                    return@withLock member.toEpisode()
+                }
+
+            val privateUri = downloadStore.uriForIdentity(identity)
+            val episode = Episode(
+                id = UUID.randomUUID().toString(),
+                title = catalogEpisode.title,
+                podcastName = podcast?.title ?: "Auralis",
+                description = catalogEpisode.description,
+                durationMs = catalogEpisode.durationMs,
+                remoteId = identity.remoteId,
+                audioUrl = resolvedUrl,
+                localUri = privateUri,
+                isAiGenerated = catalogEpisode.isAiGenerated,
+                sourceId = identity.sourceId,
+                isInLibrary = true,
+            )
+            dao.upsert(EpisodeEntity.from(episode))
+            episode
         }
+    }
 
-        val privateUri = downloadStore.uriForIdentity(DownloadIdentity(sourceId, remoteId))
-        val episode = Episode(
-            id = UUID.randomUUID().toString(),
-            title = catalogEpisode.title,
-            podcastName = podcast?.title ?: "Auralis",
-            description = catalogEpisode.description,
-            durationMs = catalogEpisode.durationMs,
-            remoteId = remoteId,
-            audioUrl = resolvedUrl,
-            localUri = privateUri,
-            isAiGenerated = catalogEpisode.isAiGenerated,
-            sourceId = sourceId,
-        )
-        dao.upsert(EpisodeEntity.from(episode))
-        episode
+    /**
+     * Removes only the durable Library membership for one exact remote identity.
+     * A private download is a separate resource and is deliberately left intact.
+     */
+    suspend fun removeFromLibrary(identity: DownloadIdentity): Boolean = withContext(Dispatchers.IO) {
+        val sourceId = identity.sourceId?.takeIf { it.isNotBlank() } ?: return@withContext false
+        val mutex = downloadMutexes.getOrPut(identity) { Mutex() }
+
+        mutex.withLock {
+            val existing = dao.getBySourceAndRemoteId(sourceId, identity.remoteId)
+                ?: return@withLock false
+            if (!existing.isInLibrary) return@withLock false
+            dao.upsert(existing.copy(isInLibrary = false))
+            true
+        }
     }
 
     fun isDownloaded(identity: DownloadIdentity): Boolean =
@@ -251,6 +282,7 @@ class LibraryRepository internal constructor(
             localUri = fileUri,
             isAiGenerated = catalogEpisode.isAiGenerated,
             sourceId = sourceId,
+            isInLibrary = false,
         )
         dao.upsert(EpisodeEntity.from(episode))
         return episode
@@ -271,11 +303,21 @@ class LibraryRepository internal constructor(
 
     fun deleteEpisode(episodeId: String) {
         scope.launch {
-            // Removing Library membership must not delete the user's offline file.
-            // The private download remains addressable by its stable source identity.
-            dao.delete(episodeId)
-            if (_currentEpisodeId.value == episodeId) {
-                _currentEpisodeId.value = null
+            // Serialize membership removal with download/retry/delete for the same
+            // source identity so a stale row cannot overwrite a newly stored file URI.
+            val initial = dao.getById(episodeId) ?: return@launch
+            val sourceId = initial.sourceId?.takeIf { it.isNotBlank() }
+            val remoteId = initial.remoteId?.takeIf { it.isNotBlank() }
+            if (sourceId != null && remoteId != null) {
+                val identity = DownloadIdentity(sourceId, remoteId)
+                val mutex = downloadMutexes.getOrPut(identity) { Mutex() }
+                mutex.withLock {
+                    dao.getById(episodeId)?.let { current ->
+                        if (current.isInLibrary) dao.upsert(current.copy(isInLibrary = false))
+                    }
+                }
+            } else if (initial.isInLibrary) {
+                dao.upsert(initial.copy(isInLibrary = false))
             }
         }
     }

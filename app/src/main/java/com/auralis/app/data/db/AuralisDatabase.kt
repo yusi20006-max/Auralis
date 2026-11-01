@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [EpisodeEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class AuralisDatabase : RoomDatabase() {
@@ -30,6 +30,14 @@ abstract class AuralisDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Existing rows were visible in Library before membership became explicit.
+                // Preserve that behavior while future download-only rows opt out.
+                db.execSQL("ALTER TABLE episodes ADD COLUMN isInLibrary INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
         fun get(context: Context): AuralisDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -37,7 +45,7 @@ abstract class AuralisDatabase : RoomDatabase() {
                     AuralisDatabase::class.java,
                     "auralis.db",
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { instance = it }
             }
