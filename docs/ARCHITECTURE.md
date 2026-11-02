@@ -1,66 +1,70 @@
 # Auralis — Architecture
 
-## Guiding decision
+## Product direction
 
-Build the Android app so local audio is a first-class source. A future remote catalog is an additional source, not a prerequisite for core playback.
+Auralis is an offline-first Android audio player. Local media and the local library remain usable without a hosted Catalog. Remote Catalog functionality is an additional source, not a prerequisite for local playback.
 
-## Initial Android direction
+## Android stack
 
-- Kotlin and Jetpack Compose for the native Android UI.
-- AndroidX Media3 ExoPlayer for audio playback.
-- MediaSessionService for playback that survives UI navigation and supports system media controls.
-- Android Storage Access Framework for user-selected local files/folders, using persisted URI permissions where supported.
-- Room for structured local data when persistence requirements justify it.
-- A repository boundary between UI/state and episode sources.
+- Kotlin, Jetpack Compose and AndroidX.
+- AndroidX Media3 ExoPlayer and MediaSession for playback and system controls.
+- Android Storage Access Framework for user-selected local media.
+- Room for persistent episode/library metadata.
+- Repository boundaries isolate UI/state from Catalog and download operations.
 
-## Episode identity (implemented)
+The current Android Gradle configuration sets namespace and application ID to **com.auralis.app**, minSdk 26, compileSdk 36, targetSdk 36, Java/Kotlin JVM target 17, versionName **0.2.1**, and versionCode **3**. Room runtime/compiler are **2.7.2**.
 
-- **Internal id:** stable primary key in Room (`Episode.id`). Never derived from URL.
-- **Remote identity:** composite `(sourceId, remoteId)`.
-  - Hosted catalog uses `CatalogConfig.SOURCE_ID = "catalog:auralis"`.
-  - Local-only and legacy rows keep `sourceId = null`.
-  - Same `remoteId` from different sources must not merge.
-- **URLs are not identity:** `audioUrl` and `localUri` are location fields only.
+## Episode identity
 
-Room enforces a unique index on `(sourceId, remoteId)`. Upsert is primary-key based (`@Insert(ABORT)` / `@Update`) so a composite conflict cannot REPLACE and erase playback/download state.
+- Internal identity is the stable Room primary key Episode.id; it is not derived from a URL.
+- Remote identity is the composite pair (sourceId, remoteId).
+- Catalog uses CatalogConfig.SOURCE_ID = catalog:auralis.
+- Local-only and legacy rows retain null source identity where appropriate.
+- Equal remote IDs from different sources must remain distinct.
+- audioUrl and localUri are locations, not identities.
 
-Database version is **2** with non-destructive `MIGRATION_1_2` (adds nullable `sourceId` + unique index). Schema JSON is exported under `app/schemas/`.
+Room has a unique index on (sourceId, remoteId). Upsert behavior must not replace an existing row and erase download or playback state on a composite-key conflict.
 
-## Library vs Catalog boundary (implemented)
+## Room persistence and migrations
 
-- Browsing the catalog does **not** write Room rows.
-- **Play / stream alone** does **not** create permanent library membership (`addOrGetStreamEpisode` returns a transient Episode).
-- Permanent membership is created only by explicit **Add to Library** (`addToLibrary`) or **Download** (`downloadEpisodeOffline`).
-- Catalog failures must not corrupt Room or interrupt offline library playback.
+- Current Room database version: **3**.
+- Exported schema: app/schemas/com.auralis.app.data.db.AuralisDatabase/3.json.
+- Migration 1→2 adds nullable sourceId and the unique composite index.
+- Migration 2→3 adds non-null isInLibrary with default 1, preserving prior Library visibility of existing rows.
+- The current entity schema includes isInLibrary; download-only records can exist without becoming Library members.
 
-## Private downloads (implemented)
+The committed schema JSON is source-controlled. CI also exports the schema during the Android build; compare both when schema-related code changes.
 
-- Files live under app-private storage (`PrivateDownloadStore`), not public MediaStore.
-- Storage key is `sourceId::remoteId` when source is known; legacy remoteId-only files remain readable as fallback.
-- Distinct sources with the same remoteId map to distinct files.
+## Catalog, Library and Download boundaries
 
-## Suggested conceptual layers
+- Browsing Catalog does not create a persistent Room row.
+- Play/stream alone does not create permanent Library membership.
+- Explicit Add to Library creates membership.
+- Download can create a persisted download record without Library membership.
+- Removing Library membership is distinct from explicitly deleting the private downloaded file.
+- Deleting a downloaded copy preserves explicit Library membership when the episode is a Library member.
+- Catalog/network failure must not corrupt Room or prevent local/offline playback.
 
-1. **Presentation:** Home/library, episode details, player, explore/catalog, settings.
-2. **Domain:** Episode identity, playback actions, library operations, and playback state.
-3. **Data:** Local file source, Room library, catalog repository (sample/local until hosted API), private download store.
-4. **Playback:** Media3 player and media session hosted independently from Compose screens.
-5. **Remote integration:** Catalog sample data today; swap to HTTP client behind `CatalogRepository` when CDN/API is ready. Do not embed secrets in the APK.
+## Private downloads
 
-## Episode model fields
+- Downloaded media is stored in app-private storage by PrivateDownloadStore.
+- Known-source storage identity is source-aware; identical remote IDs from different sources map to distinct files.
+- Legacy remoteId-only files are handled conservatively; ambiguous files are not automatically assigned to a source.
+- Cancellation and failed/incomplete transfers must clean partial .part files.
+- The free-space guard uses the real filesystem probe by default; an injectable probe supports deterministic tests.
 
-- id, title, podcastName, description, durationMs
-- artworkUri, localUri, remoteId, audioUrl, sourceId
-- isAiGenerated, lastPositionMs, lastPlayedAt
+## Playback and verification boundary
 
-## Reliability and security
+The regression suite verifies local URI resolution and persistence boundaries. It does not prove Media3 decoding, background behavior under every Android vendor policy, or physical-device playback. Keep the device checklist in [MVP-TEST-PLAN.md](MVP-TEST-PLAN.md) explicit and owner-run.
 
-- Never embed server secrets in the Android app.
+## Current Catalog integration boundary
+
+The current CatalogRepository serves an in-app sample feed and HTTPS stream URLs. It is not a production-hosted backend or CDN. A future hosted implementation must remain behind the repository boundary, validate metadata/URLs, handle timeout/cache/offline failures, and keep server secrets out of the APK.
+
+## Security and operational constraints
+
+- Never embed server/admin secrets in the Android application.
+- Never commit a real keystore or signing credentials.
 - Validate remote URLs and metadata before use.
-- Handle missing files, expired URLs, network errors, and interrupted downloads.
-- Keep local playback available when the server is unreachable.
-- Avoid unnecessary analytics and account systems.
-
-## Catalog status
-
-`CatalogRepository` currently serves an in-memory sample feed of HTTPS streams so online playback can be exercised without a backend. When a hosted catalog is available, keep the same repository surface and inject a remote data source; do not couple UI directly to HTTP.
+- Keep local playback available when remote services are unavailable.
+- Production hosting, paid services, production signing and public distribution require separate owner approval.
