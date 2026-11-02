@@ -26,7 +26,7 @@ Last updated for Issue #14 against main merge SHA `37893a28835aa4ed879641254520b
 | #29 | Catalog UI and explicit Library membership | **MERGED** — PR #35; Room schema v3 |
 | #30 | Integrated Catalog/Library/Download/Playback regression | **MERGED** — PR #30; post-merge Android CI PASS on its merge SHA |
 | #31 | Documentation and Release readiness | **MERGED** — PR #36; Issue #31 closed |
-| #14 | Catalog API contract and infrastructure decision | **IN PROGRESS — design only; no provider selected and no service deployed** |
+| #14 | Catalog API contract and infrastructure decision | **IN PROGRESS — design only; PR #37 under review; no provider selected and no service deployed** |
 | #15 | Hosted Catalog, streaming and offline download | **BLOCKED** pending explicit approval of #14 design and cost |
 | #16 | Publishing workflow and content operations | **NOT STARTED**; follows #15 |
 
@@ -37,11 +37,11 @@ Last updated for Issue #14 against main merge SHA `37893a28835aa4ed879641254520b
 - Issue #31 closed as completed.
 - PR-head Android CI [#41414891161](https://github.com/yusi20006-max/Auralis/actions/runs/41414891161): SUCCESS on PR head SHA `9b4621b43aaf37304c549dacfab92dd60ef31b7f`.
 - Codex review summary on the same PR head: completed, no findings; no unresolved review threads.
-- Post-merge Android CI [#41416512537](https://github.com/yusi20006-max/Auralis/actions/runs/41416512537): launched on merge SHA `37893a28835aa4ed879641254520b994b3a363c5`; its final result must be recorded after completion.
+- Post-merge Android CI [#41416512537](https://github.com/yusi20006-max/Auralis/actions/runs/41416512537): **SUCCESS** on merge SHA `37893a28835aa4ed879641254520b994b3a363c5`.
 
 ## Issue #14 design boundary
 
-The design artifact is [CATALOG-API-DECISION.md](CATALOG-API-DECISION.md). It defines a provider-neutral v1 JSON contract, read-only resources, immutable media URLs, HTTP cache/range/error behavior, identity rules, security/privacy controls, backup/retention proposals and indicative provider cost scenarios.
+The design artifact is [CATALOG-API-DECISION.md](CATALOG-API-DECISION.md), under review in [PR #37](https://github.com/yusi20006-max/Auralis/pull/37). It defines a provider-neutral v1 JSON contract, read-only resources, immutable media URLs, HTTP cache/range/error behavior, identity rules, security/privacy controls, backup/retention proposals and indicative provider cost scenarios.
 
 No provider has been selected. No production account, bucket, database, domain, paid plan or deployment has been created. Issue #15 remains gated until the owner explicitly approves the final design and cost ceiling.
 
