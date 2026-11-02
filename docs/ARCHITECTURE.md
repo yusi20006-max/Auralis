@@ -61,6 +61,10 @@ The regression suite verifies local URI resolution and persistence boundaries. I
 
 CatalogRepository starts with in-memory sample data and can refresh JSON through CatalogConfig.catalogUrl. The current default URL is the raw GitHub file docs/catalog.json in this repository. This is a static sample/test catalog, not a production API, managed publishing service, object store or production CDN. The JSON references separately hosted external sample audio URLs. A future production implementation must remain behind the repository boundary, validate metadata/URLs, handle timeout/cache/offline failures, and keep server secrets out of the APK.
 
+## Proposed Catalog API boundary
+
+Issue #14 defines a provider-neutral, public read-only v1 contract and infrastructure trade-offs in [CATALOG-API-DECISION.md](CATALOG-API-DECISION.md). The current sample JSON is not yet compliant with that proposed contract. Implementation and migration of the Android client are not part of this design document and must be handled in the approved follow-up scope.
+
 ## Security and operational constraints
 
 - Never embed server/admin secrets in the Android application.

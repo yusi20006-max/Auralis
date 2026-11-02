@@ -39,6 +39,7 @@ CI also runs scripts/install-brand-icons.sh before assembling APKs. That script 
 - [MVP and regression test plan](docs/MVP-TEST-PLAN.md)
 - [Release, signing, install and rollback](docs/RELEASE.md)
 - [Asset and license audit](docs/ASSET-LICENSE-AUDIT.md)
+- [Catalog API v1 and infrastructure decision](docs/CATALOG-API-DECISION.md)
 
 ## License
 
