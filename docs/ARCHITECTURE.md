@@ -59,7 +59,7 @@ The regression suite verifies local URI resolution and persistence boundaries. I
 
 ## Current Catalog integration boundary
 
-The current CatalogRepository serves an in-app sample feed and HTTPS stream URLs. It is not a production-hosted backend or CDN. A future hosted implementation must remain behind the repository boundary, validate metadata/URLs, handle timeout/cache/offline failures, and keep server secrets out of the APK.
+CatalogRepository starts with in-memory sample data and can refresh JSON through CatalogConfig.catalogUrl. The current default URL is the raw GitHub file docs/catalog.json in this repository. This is a static sample/test catalog, not a production API, managed publishing service, object store or production CDN. The JSON references separately hosted external sample audio URLs. A future production implementation must remain behind the repository boundary, validate metadata/URLs, handle timeout/cache/offline failures, and keep server secrets out of the APK.
 
 ## Security and operational constraints
 
