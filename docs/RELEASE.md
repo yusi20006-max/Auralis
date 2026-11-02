@@ -27,7 +27,7 @@ Sources of truth: app/build.gradle.kts, app/src/main/java/com/auralis/app/data/d
 - Explicit distinction between Library membership and downloaded-file ownership.
 - Integrated Catalog/Library/Download/Playback regression coverage.
 
-The Catalog is currently sample/in-app; a production-hosted API/CDN is not configured.
+Catalog refresh currently reads the static sample/test JSON at the repository's raw GitHub URL (docs/catalog.json). This is not a production API, managed publishing service or production CDN.
 
 ## CI artifacts and signing
 
