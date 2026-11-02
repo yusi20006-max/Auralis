@@ -7,7 +7,6 @@ import androidx.test.core.app.ApplicationProvider
 import com.auralis.app.data.catalog.CatalogConfig
 import com.auralis.app.data.catalog.CatalogEpisode
 import com.auralis.app.data.catalog.CatalogRepository
-import com.auralis.app.data.catalog.CatalogPodcast
 import com.auralis.app.data.db.AuralisDatabase
 import com.auralis.app.data.download.DownloadCancelledException
 import com.auralis.app.data.download.DownloadIdentity
@@ -25,6 +24,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
