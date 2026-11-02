@@ -1,73 +1,94 @@
-# Auralis v0.1.0 — release notes (internal / experimental)
+# Auralis v0.2.1 — internal release candidate notes
 
-**versionName:** `0.1.0`  
-**versionCode:** `1`  
-**applicationId:** `com.auralis.app` (debug suffix `.debug`)  
-**Git tag (create on GitHub):** `v0.1.0` → pin to the commit that contains this file and `LICENSE`
+This document describes the current CI/build baseline. It does **not** announce a public or production release.
 
-## Tag this release (owner, one-time)
+## Build metadata
 
-In the repo on GitHub:
+| Field | Value |
+|---|---|
+| versionName | 0.2.1 |
+| versionCode | 3 |
+| applicationId | com.auralis.app |
+| Debug application ID | com.auralis.app.debug |
+| minSdk | 26 |
+| compileSdk / targetSdk | 36 / 36 |
+| Room schema | 3 |
+| Room runtime/compiler | 2.7.2 |
 
-1. **Releases** → **Draft a new release**
-2. Tag: `v0.1.0` (create new tag on `main`)
-3. Title: `Auralis v0.1.0`
-4. Paste summary from «What is included» below
-5. Publish
+Sources of truth: app/build.gradle.kts, app/src/main/java/com/auralis/app/data/db/AuralisDatabase.kt, and app/schemas/com.auralis.app.data.db.AuralisDatabase/3.json.
 
-Or CLI (with auth):
+## Included functionality
 
-```bash
-git fetch origin main
-git tag -a v0.1.0 <main-sha> -m "Auralis v0.1.0"
-git push origin v0.1.0
-```
+- Local media import and Room-backed Library.
+- Media3 playback integration, background service and system controls (device validation remains outstanding).
+- Sample Catalog browse and stream.
+- Separate Play, Add to Library and Download behavior.
+- Source-aware private downloads, retry/cancellation and partial-file cleanup.
+- Explicit distinction between Library membership and downloaded-file ownership.
+- Integrated Catalog/Library/Download/Playback regression coverage.
 
-## What is included
+Catalog refresh currently reads the static sample/test JSON at the repository's raw GitHub URL (docs/catalog.json). This is not a production API, managed publishing service or production CDN.
 
-- Offline library (import, delete, Room persistence, playback position)
-- Media3 background playback (notification, lock screen, audio focus, becoming-noisy)
-- Now Playing, Mini Player, speed control, seek ±15s
-- Explore sample catalog: stream + private offline download (sandbox)
-- Persian RTL UI, Vazirmatn via Google Fonts
-- Brand launcher icon install in CI (`scripts/install-brand-icons.sh`)
-- Error messages for bad URI / Media3 failures
-- **LICENSE:** All Rights Reserved (proprietary)
+## CI artifacts and signing
 
-## Build artifacts (CI)
+The .github/workflows/android-ci.yml workflow runs :app:testDebugUnitTest, uploads auralis-room-schemas, assembles Debug/Release APKs, and uploads auralis-debug-apk and auralis-release-apk. Its Release build step is explicitly named “Build signed release APK (debug keystore fallback)”.
 
-From green **Android CI** on `main`:
+The Release build configuration is conditional:
+- If root keystore.properties exists, the configured release signing values are used.
+- If it does not exist, the Release build falls back to the Debug signing configuration.
 
-| Artifact | Use |
-|----------|-----|
-| `auralis-debug-apk` | Daily install / QA |
-| `auralis-release-apk` | Debug-keystore fallback unless `keystore.properties` is set |
+Consequently, a CI *-release.apk built without owner-provided signing configuration is **debug-signed**. It is useful for internal QA only and must not be labeled production-signed or uploaded as a production release.
 
-### Local release with your keystore
+No keystore, signing secret or credential is created, requested, exposed or committed by this procedure.
 
-1. Copy `keystore.properties.example` → `keystore.properties` (do not commit secrets).
-2. Point `storeFile` at your `.jks` / `.keystore`.
-3. `./gradlew :app:assembleRelease`
+## Build
+
+Run scripts/bootstrap-wrapper.sh, then:
+- ./gradlew testDebugUnitTest
+- ./gradlew :app:assembleDebug
+- ./gradlew :app:assembleRelease
+
+CI runs scripts/install-brand-icons.sh before assembly. Its remote fallback and provenance are documented in [Asset and license audit](ASSET-LICENSE-AUDIT.md).
 
 ## Install
 
-```text
-adb install -r path/to/app-debug.apk
-```
+For an internal Debug APK: adb install -r path/to/app-debug.apk
 
-## Upgrade / rollback
+The Debug variant has application ID suffix .debug and can coexist with the non-debug application ID.
 
-- Same `applicationId`: `adb install -r`
-- Room DB version **1**; clear app data resets library and private downloads
-- Rollback: older CI APK with same applicationId
+## Upgrade and database compatibility
 
-## License
+- Install an update with the same application ID using adb install -r.
+- Current Room schema is version 3.
+- Supported in-app migrations are 1→2 and 2→3; the latter adds isInLibrary with default value 1 to preserve existing membership.
+- The app's normal migration path is forward-only. Installing an older APK against a newer Room database may fail because no downgrade migration is defined.
+- Do **not** clear app data as a rollback shortcut: that can delete the local database and app-private downloaded media.
+- Before attempting rollback, preserve user-owned media outside the app and confirm a tested backup/restore path. A safe database downgrade procedure is not currently provided.
 
-**All Rights Reserved** — see [LICENSE](../LICENSE).
+## Rollback
 
-## Out of scope for v0.1
+1. Stop distribution of the candidate build.
+2. Preserve the candidate APK, its SHA-256, CI run URL and logs.
+3. Do not uninstall or clear app data if local downloads/library data must be retained.
+4. Do not install an older version over a schema-v3 database unless a compatible downgrade/restore procedure has been implemented and tested.
+5. Record the affected app version, database version, device and failure evidence; prepare a forward-fix or a separately tested data restore.
 
-- Production Play Store keystore in GitHub Secrets
-- Hosted API / real CDN (#14–#16)
-- Playback queue, Search, Onboarding, at-rest encryption
-- Branch protection (GitHub settings → owner)
+## Release checklist
+
+- [ ] Candidate commit and main SHA are recorded.
+- [ ] CI passes on the exact candidate SHA.
+- [ ] Post-merge CI passes on the exact main merge SHA.
+- [ ] Debug and Release APK artifacts are present.
+- [ ] Signing certificate identity is inspected; debug fallback is clearly labeled.
+- [ ] Room schema artifact matches the committed schema JSON.
+- [ ] Device checks are completed or explicitly marked NOT RUN.
+- [ ] Asset/license audit has no unresolved permission represented as approved.
+- [ ] Install/upgrade/rollback risks are reviewed.
+- [ ] No keystore or secret is committed or disclosed.
+- [ ] Public release, Play Store and production signing have separate explicit owner approval.
+
+## License and distribution
+
+The repository declares All Rights Reserved for project-owned materials; see [LICENSE](../LICENSE). Third-party libraries, fonts, remote artwork and sample content remain subject to their own terms. See [Asset and license audit](ASSET-LICENSE-AUDIT.md).
+
+Public distribution, Play Store publication, production signing and production hosting are outside this Issue and require separate approval.
