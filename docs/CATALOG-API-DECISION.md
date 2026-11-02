@@ -199,14 +199,14 @@ Prices below are public list prices checked on 2026-11-02. They are estimates, n
 |---|---|---|---|
 | Existing GitHub Pages | Small static JSON index and documentation only | 1 GB published-site limit; 100 GB/month soft bandwidth limit | Keep for sample/test metadata if useful. Not the audio origin and not a production media platform. |
 | Cloudflare R2 Standard | Public audio object storage | First 10 GB-month, 1M Class A and 10M Class B requests/month free; then $0.015/GB-month, $4.50/M Class A, $0.36/M Class B; internet egress free | Strong candidate when audio streaming/download egress is the dominant uncertainty. |
-| Backblaze B2 | Public audio object storage / archive source | First 10 GB free; $6.95/TB-month; egress free up to 3× average monthly stored data, then $0.01/GB; most common transaction classes free | Strong low-cost alternative at modest egress; overage and CDN route need modeling. |
-| Supabase Storage + database | Integrated database, auth and storage when those capabilities are genuinely needed | Pro starts at $25/month; includes 100 GB file storage and 250 GB egress, then published overage applies | Overbuilt for a public read-only JSON catalog; baseline subscription and egress make it less attractive for media-only delivery. |
+| Backblaze B2 | Public audio object storage / archive source | First 10 GB free; $6.95/TB-month; egress free up to 3× average monthly stored data, then $0.01/GB; API transactions free | Strong low-cost alternative at modest egress; overage and CDN route need modeling. |
+| Supabase Storage + database | Integrated database, auth and storage when those capabilities are genuinely needed | Pro starts at $25/month; includes 100 GB file storage, 250 GB uncached egress and 250 GB cached egress; overages $0.0213/GB storage, $0.09/GB uncached egress and $0.03/GB cached egress. One Micro compute instance is covered by the plan's $10 compute credit; extra projects/compute and custom domains can add cost. | Overbuilt for a public read-only Catalog; useful only if a real database/auth requirement appears. |
 
 GitHub Pages must not be treated as a production audio CDN. Its published bandwidth limit is soft and GitHub may recommend moving high-traffic content to a CDN or other hosting service.
 
 ### 6.2 Audio-size assumptions
 
-Approximate uncompressed MP3 payload size (decimal units, before container/metadata overhead):
+Approximate MP3 payload size (decimal units, before container/metadata overhead):
 
 `size_MB ≈ bitrate_kbps × duration_seconds ÷ 8 ÷ 1000`
 
@@ -234,7 +234,7 @@ Indicative object-storage-only costs using the listed free allowances:
 | Growth | About $0.17 storage; egress free | About $0.08 storage; egress within 3× stored data |
 | High | About $0.71 storage; egress free | About $0.33 storage + $1.15 egress overage = $1.48 |
 
-Calculations use 10 GB free storage for each provider, R2's 10 GB-month free tier and free internet egress, and B2's 10 GB free storage plus 3× average-storage free egress. They exclude request charges where the scenario remains within published free allowances, taxes, domain, backup copy, CDN/compute outside the stated partner arrangements, support and labor. B2's egress threshold uses average monthly storage, not simply the end-of-month object count.
+Calculations use 10 GB free storage for each provider, R2's 10 GB-month free tier and free internet egress, and B2's 10 GB free storage plus 3× average-storage free egress. They exclude request charges where the scenario remains within published free allowances, taxes, domain, backup copy, CDN/compute outside the stated partner arrangements, support and labor. B2's egress threshold uses average monthly storage, not simply the end-of-month object count. Supabase is not included in the object-storage-only scenario table because it includes a database/compute platform and its plan-level baseline would dominate these small media-storage estimates.
 
 The estimates show that raw storage cost is not the principal early-stage risk. Egress policy, reliability, geographic performance, restore process, account/payment availability and operator workload matter more. A provider's free tier is not a guarantee of permanent zero-cost production operation.
 
@@ -265,7 +265,7 @@ No provider is selected by this document. No production account, bucket, databas
 - Approve public read-only Catalog for v1, or identify a concrete private-content requirement.
 - Approve the proposed versioned JSON + immutable object-storage architecture.
 - Approve a provider after region/network checks and a finalized usage estimate.
-- Approve a monthly cost ceiling, alert threshold and backup retention.
+- Approve a monthly spending ceiling, alert threshold and backup retention.
 - Approve whether a custom domain is required now or can wait.
 
 Until those decisions are explicitly approved, this remains a design artifact only.
@@ -273,9 +273,8 @@ Until those decisions are explicitly approved, this remains a design artifact on
 ## 9. Public pricing and platform references
 
 - Cloudflare R2 pricing: https://developers.cloudflare.com/r2/pricing/
-- Cloudflare plans and Workers pricing: https://www.cloudflare.com/plans/
 - Backblaze B2 pricing: https://www.backblaze.com/cloud-storage/pricing
-- Supabase pricing: https://supabase.com/pricing
+- Supabase pricing and plan allowances: https://supabase.com/pricing
 - GitHub Pages limits: https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits
 
 Last checked: 2026-11-02.
