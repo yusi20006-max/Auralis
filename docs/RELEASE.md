@@ -31,7 +31,7 @@ The Catalog is currently sample/in-app; a production-hosted API/CDN is not confi
 
 ## CI artifacts and signing
 
-Android CI produces Debug and Release APK artifacts and a Room schema artifact.
+The .github/workflows/android-ci.yml workflow runs :app:testDebugUnitTest, uploads auralis-room-schemas, assembles Debug/Release APKs, and uploads auralis-debug-apk and auralis-release-apk. Its Release build step is explicitly named “Build signed release APK (debug keystore fallback)”.
 
 The Release build configuration is conditional:
 - If root keystore.properties exists, the configured release signing values are used.
