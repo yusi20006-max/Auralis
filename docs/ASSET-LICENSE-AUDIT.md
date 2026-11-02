@@ -10,11 +10,18 @@ Scope: repository license declaration, launcher artwork, typography, Catalog sam
 | Project source and authored documentation | LICENSE declares All Rights Reserved | **DECLARED PROPRIETARY** | Keep the notice; confirm copyright ownership for all contributed material. |
 | In-repository vector launcher mark | app/src/main/res/drawable/ic_launcher_foreground.xml contains vector paths and comments describing the Auralis mark | **SOURCE PRESENT; AUTHORSHIP NOT FORMALLY RECORDED** | Record creator/assignment or owner approval. |
 | PNG launcher artwork fallback | scripts/install-brand-icons.sh downloads https://litter.catbox.moe/5mamgu.png when no local icon asset is available. scripts/icon-assets/README.md calls it an owner-approved crop, but no license/permission record or pinned checksum is present in the repository. | **UNVERIFIED / RELEASE BLOCKER** | Replace with an owner-controlled, committed asset and record provenance/permission; or remove remote fallback. Do not treat the script comment as documentary proof of rights. |
-| Vazirmatn typography | README describes Vazirmatn via Google Fonts; Gradle includes Compose Google Fonts support. No bundled font file or font license notice was verified in this audit. | **THIRD-PARTY LICENSE RECORD NEEDED** | Record the exact font family/source and applicable license notice in the shipped notices; confirm runtime/provider terms. |
+| Vazirmatn typography | README describes Vazirmatn via Google Fonts; Gradle includes Compose Google Fonts support. The upstream Vazirmatn project identifies the font as SIL Open Font License 1.1. No bundled font file or license notice was verified in this repository. | **UPSTREAM LICENSE IDENTIFIED; PACKAGING NOTICE NOT VERIFIED** | Record the exact font version/source and include the applicable OFL notice if font software is bundled; verify the actual Google Fonts runtime/provider path used by the app. |
 | Catalog sample audio | docs/catalog.json and CatalogRepository.kt reference ExoPlayer test media and SoundHelix MP3 URLs. | **RIGHTS / ATTRIBUTION NOT VERIFIED** | Obtain and record permission/license/attribution for each exact track before distribution, or replace with content whose rights are documented. |
 | Sample Catalog metadata | Catalog entries mark sample tracks as AI-generated, while descriptions identify test/demo audio (Jazz in Paris and SoundHelix examples). | **METADATA / CONTENT MISMATCH** | Do not represent demo tracks as actual AI-generated podcast episodes. Replace the audio with matching cleared content or correct the metadata and product presentation. |
 | Artwork in remote Catalog | Current docs/catalog.json entries have coverUrl null. | **NO REMOTE COVER ART IN CURRENT JSON** | Audit any artwork added in later Catalog revisions before release. |
 | AndroidX, Kotlin, Compose, Media3, Room, Coil and other Gradle dependencies | Dependencies are declared in app/build.gradle.kts; this audit did not produce a complete transitive dependency/license inventory. | **THIRD-PARTY NOTICE INVENTORY INCOMPLETE** | Generate and review a dependency license inventory for the exact release build; include required notices and attribution. |
+
+## External license references
+
+- Vazirmatn upstream project and OFL-1.1 declaration: https://github.com/rastikerdar/vazirmatn
+- SIL Open Font License 1.1 text and guidance: https://openfontlicense.org/
+
+The upstream font license identification does not prove which exact font binary/version the app loads at runtime; preserve the version/source and required notices with the release materials.
 
 ## Catalog hosting distinction
 
