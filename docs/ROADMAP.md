@@ -6,7 +6,7 @@
 - Room schema version 3; migrations 1→2 and 2→3 are implemented.
 - Latest main baseline before Issue #31: 0c29ccd48f43a2373c7035280a74f2bcae62253b.
 - Post-merge Android CI run [#41382934207](https://github.com/yusi20006-max/Auralis/actions/runs/41382934207) succeeded on the Issue #30 merge SHA; GitHub Pages run [#41382933290](https://github.com/yusi20006-max/Auralis/actions/runs/41382933290) also succeeded.
-- CI Release APK currently falls back to debug signing when no owner-supplied keystore is configured. It is not production-signed.
+- The Android CI workflow explicitly builds the Release APK with a debug-keystore fallback; CI labels this step accordingly. This artifact is not production-signed.
 - Emulator and physical-device E2E playback: **NOT RUN**.
 
 ## Completed implementation phases
