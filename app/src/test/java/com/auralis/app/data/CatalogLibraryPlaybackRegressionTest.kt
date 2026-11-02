@@ -11,6 +11,7 @@ import com.auralis.app.data.db.AuralisDatabase
 import com.auralis.app.data.download.DownloadCancelledException
 import com.auralis.app.data.download.DownloadIdentity
 import com.auralis.app.data.download.DownloadStore
+import com.auralis.app.data.download.PrivateDownloadStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,11 +32,16 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.BufferedReader
+import java.io.Closeable
 import java.io.File
+import java.io.InputStreamReader
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.net.ServerSocket
+import kotlin.concurrent.thread
 
 /**
  * Cross-layer regression coverage for Issue #30.
@@ -229,6 +235,92 @@ class CatalogLibraryPlaybackRegressionTest {
             assertTrue(allRows.any { it.id == local.id && it.sourceId == null && it.isInLibrary })
         } finally {
             localFile.delete()
+        }
+    }
+
+
+    @Test
+    fun interruptedHttpDownloadRemovesPartialFileAndDoesNotPersistEpisode() = runBlocking {
+        val podcast = requireNotNull(catalog.getPodcast("ai-philosophy"))
+        PartialAudioServer(holdAfterBody = false).use { server ->
+            val store = PrivateDownloadStore(context)
+            val repository = LibraryRepository(database.episodeDao(), store, scope)
+            val episode = catalog.getEpisode("ep-philo-1")!!.copy(
+                id = "issue30-truncated-${System.nanoTime()}",
+                audioUrl = server.url,
+            )
+            val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, episode.id)
+
+            assertNull(repository.downloadEpisodeOffline(identity, episode, podcast))
+
+            assertTrue(repository.downloadErrors.value.containsKey(identity))
+            assertFalse(store.fileForIdentity(identity.sourceId, identity.remoteId).exists())
+            assertFalse(store.partialFileForIdentity(identity.sourceId, identity.remoteId).exists())
+            assertTrue(database.episodeDao().observeAll().first().none { it.remoteId == episode.id })
+        }
+    }
+
+    @Test
+    fun cancellingRealHttpDownloadCleansPartialFileBeforeRetry() = runBlocking {
+        val podcast = requireNotNull(catalog.getPodcast("ai-philosophy"))
+        PartialAudioServer(holdAfterBody = true).use { server ->
+            val store = PrivateDownloadStore(context)
+            val repository = LibraryRepository(database.episodeDao(), store, scope)
+            val episode = catalog.getEpisode("ep-philo-1")!!.copy(
+                id = "issue30-cancel-${System.nanoTime()}",
+                audioUrl = server.url,
+            )
+            val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, episode.id)
+            val pending = async(Dispatchers.IO) {
+                repository.downloadEpisodeOffline(identity, episode, podcast)
+            }
+
+            assertTrue(server.bodySent.await(5, TimeUnit.SECONDS))
+            repository.cancelDownload(identity)
+            server.release.countDown()
+            assertNull(pending.await())
+
+            assertFalse(store.fileForIdentity(identity.sourceId, identity.remoteId).exists())
+            assertFalse(store.partialFileForIdentity(identity.sourceId, identity.remoteId).exists())
+            assertTrue(database.episodeDao().observeAll().first().none { it.remoteId == episode.id })
+        }
+    }
+
+    private class PartialAudioServer(private val holdAfterBody: Boolean) : Closeable {
+        private val server = ServerSocket(0)
+        val bodySent = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val url = "http://127.0.0.1:${server.localPort}/audio.mp3"
+        private val worker = thread(isDaemon = true, name = "issue30-partial-audio-server") {
+            try {
+                server.accept().use { socket ->
+                    val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+                    while (true) {
+                        val line = reader.readLine() ?: break
+                        if (line.isEmpty()) break
+                    }
+                    val output = socket.getOutputStream()
+                    output.write(
+                        ("HTTP/1.1 200 OK\\r\\n" +
+                            "Content-Type: audio/mpeg\\r\\n" +
+                            "Content-Length: 2048\\r\\n" +
+                            "Connection: close\\r\\n\\r\\n").toByteArray(),
+                    )
+                    output.write(ByteArray(128) { 4 })
+                    output.flush()
+                    bodySent.countDown()
+                    if (holdAfterBody) release.await(5, TimeUnit.SECONDS)
+                    socket.shutdownOutput()
+                }
+            } catch (_: Exception) {
+                // The client may disconnect immediately after cancellation.
+            }
+        }
+
+        override fun close() {
+            release.countDown()
+            runCatching { server.close() }
+            runCatching { worker.join(1_000) }
         }
     }
 
