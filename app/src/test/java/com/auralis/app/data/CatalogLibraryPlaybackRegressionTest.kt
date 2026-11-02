@@ -10,6 +10,7 @@ import com.auralis.app.data.catalog.CatalogRepository
 import com.auralis.app.data.db.AuralisDatabase
 import com.auralis.app.data.download.DownloadCancelledException
 import com.auralis.app.data.download.DownloadIdentity
+import com.auralis.app.data.download.InsufficientSpaceException
 import com.auralis.app.data.download.DownloadStore
 import com.auralis.app.data.download.PrivateDownloadStore
 import kotlinx.coroutines.CoroutineScope
@@ -203,6 +204,23 @@ class CatalogLibraryPlaybackRegressionTest {
         assertEquals(identity.remoteId, retried.remoteId)
     }
 
+
+    @Test
+    fun insufficientStorageIsReportedWithoutPersistingDownloadRecord() = runBlocking {
+        val podcast = requireNotNull(catalog.getPodcast("ai-philosophy"))
+        val episode = catalog.getEpisode("ep-philo-1")!!.copy(
+            id = "issue30-no-space-${System.nanoTime()}",
+        )
+        val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, episode.id)
+        downloads.failForInsufficientSpace(identity)
+
+        assertNull(library.downloadEpisodeOffline(identity, episode, podcast))
+
+        assertEquals("فضای ذخیره‌سازی کافی نیست.", library.downloadErrors.value[identity])
+        assertFalse(library.isDownloaded(identity))
+        assertTrue(database.episodeDao().observeAll().first().none { it.remoteId == episode.id })
+    }
+
     @Test
     fun sameRemoteIdAcrossSourcesAndLocalImportRemainIndependent() = runBlocking {
         val podcast = requireNotNull(catalog.getPodcast("ai-philosophy"))
@@ -329,6 +347,7 @@ class CatalogLibraryPlaybackRegressionTest {
         private val files = ConcurrentHashMap<DownloadIdentity, File>()
         private val cancelled = ConcurrentHashMap.newKeySet<DownloadIdentity>()
         private val failures = ConcurrentHashMap.newKeySet<DownloadIdentity>()
+        private val insufficientSpace = ConcurrentHashMap.newKeySet<DownloadIdentity>()
         @Volatile private var blockNext = false
         val started = CountDownLatch(1)
         val release = CountDownLatch(1)
@@ -339,6 +358,10 @@ class CatalogLibraryPlaybackRegressionTest {
 
         fun failNext(identity: DownloadIdentity) {
             failures.add(identity)
+        }
+
+        fun failForInsufficientSpace(identity: DownloadIdentity) {
+            insufficientSpace.add(identity)
         }
 
         fun blockNextDownload() {
@@ -368,6 +391,7 @@ class CatalogLibraryPlaybackRegressionTest {
                 }
             }
             if (cancelled.remove(identity)) throw DownloadCancelledException(identity.remoteId)
+            if (insufficientSpace.remove(identity)) throw InsufficientSpaceException(0L)
             if (failures.remove(identity)) throw IOException("Simulated transient download failure")
 
             val file = File(root, identity.hashCode().toString() + ".mp3")
