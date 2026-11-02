@@ -18,7 +18,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - Primary key: (sourceId, remoteId); ambiguous remoteId-only legacy files are preserved, never auto-matched
  * - Cancel + .part cleanup, free-space guard, final validation
  */
-class PrivateDownloadStore(private val context: Context) : DownloadStore {
+class PrivateDownloadStore(
+    private val context: Context,
+    /** Injectable free-space probe for deterministic storage-boundary tests. */
+    private val availableBytesOverride: (() -> Long)? = null,
+) : DownloadStore {
 
     private val root: File = File(context.filesDir, DIR_NAME).also { it.mkdirs() }
     private val cancelFlags = ConcurrentHashMap<DownloadIdentity, AtomicBoolean>()
@@ -127,7 +131,7 @@ class PrivateDownloadStore(private val context: Context) : DownloadStore {
         cancelFlags[DownloadIdentity(sourceId, remoteId)]?.set(false)
     }
 
-    fun availableBytes(): Long = try {
+    fun availableBytes(): Long = availableBytesOverride?.invoke() ?: try {
         StatFs(root.absolutePath).availableBytes
     } catch (_: Exception) {
         Long.MAX_VALUE
