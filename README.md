@@ -9,7 +9,7 @@
 - Minimum Android: API 26; compile/target SDK: 36/36
 - Room schema: version **3**
 - CI Debug and Release APKs are internal development/QA artifacts. Without owner-provided signing configuration, the Release variant falls back to the debug signing configuration and is **not production-signed**.
-- Hosted production Catalog: not configured; Explore currently uses the in-app sample repository.
+- Catalog refresh currently reads a static sample/test JSON file from this repository's raw GitHub URL; this is not a production API/backend or managed hosting service.
 
 ## Implemented capabilities
 
