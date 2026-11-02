@@ -301,10 +301,10 @@ class CatalogLibraryPlaybackRegressionTest {
                     }
                     val output = socket.getOutputStream()
                     output.write(
-                        ("HTTP/1.1 200 OK\\r\\n" +
-                            "Content-Type: audio/mpeg\\r\\n" +
-                            "Content-Length: 2048\\r\\n" +
-                            "Connection: close\\r\\n\\r\\n").toByteArray(),
+                        ("HTTP/1.1 200 OK\r\n" +
+                            "Content-Type: audio/mpeg\r\n" +
+                            "Content-Length: 2048\r\n" +
+                            "Connection: close\r\n\r\n").toByteArray(),
                     )
                     output.write(ByteArray(128) { 4 })
                     output.flush()
