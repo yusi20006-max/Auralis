@@ -5,7 +5,6 @@ import android.net.Uri
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.auralis.app.data.catalog.CatalogConfig
-import com.auralis.app.data.catalog.CatalogEpisode
 import com.auralis.app.data.catalog.CatalogRepository
 import com.auralis.app.data.db.AuralisDatabase
 import com.auralis.app.data.download.DownloadCancelledException
@@ -18,15 +17,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -36,12 +34,12 @@ import org.robolectric.annotation.Config
 import java.io.BufferedReader
 import java.io.Closeable
 import java.io.File
-import java.io.InputStreamReader
 import java.io.IOException
+import java.io.InputStreamReader
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import java.net.ServerSocket
+import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /**
@@ -178,6 +176,10 @@ class CatalogLibraryPlaybackRegressionTest {
         }.single { it.id == member.id }
         assertTrue("deleting the offline copy must preserve explicit Library membership", afterDelete.isInLibrary)
         assertFalse(library.isDownloaded(identity))
+        assertEquals(
+            catalogEpisode.audioUrl,
+            LocalUriAccess.resolvePlayableUri(context, member.copy(localUri = null))?.toString(),
+        )
     }
 
     @Test
@@ -203,7 +205,6 @@ class CatalogLibraryPlaybackRegressionTest {
         assertTrue(library.isDownloaded(identity))
         assertEquals(identity.remoteId, retried.remoteId)
     }
-
 
     @Test
     fun insufficientStorageIsReportedWithoutPersistingDownloadRecord() = runBlocking {
@@ -304,7 +305,7 @@ class CatalogLibraryPlaybackRegressionTest {
                     socket.shutdownOutput()
                 }
             } catch (_: Exception) {
-                // The client may disconnect immediately after cancellation.
+                // The client may disconnect immediately after the truncated response.
             }
         }
 
