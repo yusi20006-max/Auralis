@@ -43,7 +43,7 @@ These tests do **not** establish Media3 decoding, real network-loss behavior dur
 ## Signing and distribution status
 
 - .github/workflows/android-ci.yml builds and uploads auralis-debug-apk, auralis-release-apk and auralis-room-schemas artifacts.
-- In app/build.gradle.kts, the Release build uses the configured release signing config only when root keystore.properties exists; otherwise it falls back to the Debug signing config.
+- The workflow step is explicitly named “Build signed release APK (debug keystore fallback)”. Gradle uses the configured release signing config only when root keystore.properties exists; otherwise it falls back to Debug signing. No CI secret-to-keystore setup is present in this workflow.
 - Therefore, absent owner-provided signing configuration, the CI Release APK is **debug-signed and not suitable as a production release**.
 - No production keystore or GitHub signing secret was created or inspected for this work.
 - Public distribution and Play Store publication are out of scope.
