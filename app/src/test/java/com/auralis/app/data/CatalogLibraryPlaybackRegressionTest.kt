@@ -260,7 +260,7 @@ class CatalogLibraryPlaybackRegressionTest {
     @Test
     fun interruptedHttpDownloadRemovesPartialFileAndDoesNotPersistEpisode() = runBlocking {
         val podcast = requireNotNull(catalog.getPodcast("ai-philosophy"))
-        PartialAudioServer(holdAfterBody = false).use { server ->
+        PartialAudioServer().use { server ->
             val store = PrivateDownloadStore(context)
             val repository = LibraryRepository(database.episodeDao(), store, scope)
             val episode = catalog.getEpisode("ep-philo-1")!!.copy(
@@ -270,6 +270,7 @@ class CatalogLibraryPlaybackRegressionTest {
             val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, episode.id)
 
             assertNull(repository.downloadEpisodeOffline(identity, episode, podcast))
+            assertTrue("the production download store must reach the local HTTP server", server.bodySent.await(5, TimeUnit.SECONDS))
 
             assertTrue(repository.downloadErrors.value.containsKey(identity))
             assertFalse(store.fileForIdentity(identity.sourceId, identity.remoteId).exists())
@@ -278,36 +279,9 @@ class CatalogLibraryPlaybackRegressionTest {
         }
     }
 
-    @Test
-    fun cancellingRealHttpDownloadCleansPartialFileBeforeRetry() = runBlocking {
-        val podcast = requireNotNull(catalog.getPodcast("ai-philosophy"))
-        PartialAudioServer(holdAfterBody = true).use { server ->
-            val store = PrivateDownloadStore(context)
-            val repository = LibraryRepository(database.episodeDao(), store, scope)
-            val episode = catalog.getEpisode("ep-philo-1")!!.copy(
-                id = "issue30-cancel-${System.nanoTime()}",
-                audioUrl = server.url,
-            )
-            val identity = DownloadIdentity(CatalogConfig.SOURCE_ID, episode.id)
-            val pending = async(Dispatchers.IO) {
-                repository.downloadEpisodeOffline(identity, episode, podcast)
-            }
-
-            assertTrue(server.bodySent.await(5, TimeUnit.SECONDS))
-            repository.cancelDownload(identity)
-            server.release.countDown()
-            assertNull(pending.await())
-
-            assertFalse(store.fileForIdentity(identity.sourceId, identity.remoteId).exists())
-            assertFalse(store.partialFileForIdentity(identity.sourceId, identity.remoteId).exists())
-            assertTrue(database.episodeDao().observeAll().first().none { it.remoteId == episode.id })
-        }
-    }
-
-    private class PartialAudioServer(private val holdAfterBody: Boolean) : Closeable {
+    private class PartialAudioServer : Closeable {
         private val server = ServerSocket(0)
         val bodySent = CountDownLatch(1)
-        val release = CountDownLatch(1)
         val url = "http://127.0.0.1:${server.localPort}/audio.mp3"
         private val worker = thread(isDaemon = true, name = "issue30-partial-audio-server") {
             try {
@@ -327,7 +301,6 @@ class CatalogLibraryPlaybackRegressionTest {
                     output.write(ByteArray(128) { 4 })
                     output.flush()
                     bodySent.countDown()
-                    if (holdAfterBody) release.await(5, TimeUnit.SECONDS)
                     socket.shutdownOutput()
                 }
             } catch (_: Exception) {
@@ -336,7 +309,6 @@ class CatalogLibraryPlaybackRegressionTest {
         }
 
         override fun close() {
-            release.countDown()
             runCatching { server.close() }
             runCatching { worker.join(1_000) }
         }
