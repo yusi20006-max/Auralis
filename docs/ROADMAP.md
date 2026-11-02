@@ -6,7 +6,7 @@
 - Room schema version 3; migrations 1→2 and 2→3 are implemented.
 - Latest main commit for the Issue #31 merge: `37893a28835aa4ed879641254520b994b3a363c5`.
 - PR #36 was squash-merged and Issue #31 closed on 2026-11-02.
-- Post-merge Android CI run [#41416512537](https://github.com/yusi20006-max/Auralis/actions/runs/41416512537) is the required verification for the new main SHA; record its final result only after completion.
+- Post-merge Android CI [#41416512537](https://github.com/yusi20006-max/Auralis/actions/runs/41416512537): **SUCCESS** on the exact main merge SHA above.
 - The Android CI workflow builds the Release APK with a debug-keystore fallback; this artifact is not production-signed.
 - Emulator and physical-device E2E playback: **NOT RUN**.
 
@@ -28,7 +28,7 @@
    - Record security, privacy, backup and retention requirements.
    - Do not select or activate a provider, create accounts/buckets/databases, buy a domain, deploy or incur charges without explicit owner approval.
 
-The design proposal is [Catalog API v1 and Infrastructure Decision](CATALOG-API-DECISION.md).
+The design proposal is [Catalog API v1 and Infrastructure Decision](CATALOG-API-DECISION.md), under review in [PR #37](https://github.com/yusi20006-max/Auralis/pull/37).
 
 ## Later phases — gated by Issue #14 approval
 
