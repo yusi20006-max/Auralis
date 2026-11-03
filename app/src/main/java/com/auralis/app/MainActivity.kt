@@ -3,6 +3,7 @@ package com.auralis.app
 import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
+import com.auralis.app.data.LocalAudioImport
 import android.os.Bundle
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
@@ -125,12 +126,30 @@ class MainActivity : ComponentActivity() {
         try {
             contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         } catch (_: Exception) { }
-        resolveDisplayNameOffMain(uri) { name ->
-            val title = name ?: "فایل صوتی"
-            lifecycleScope.launch {
-                val episode = libraryRepository.addLocalEpisode(uri = uri, title = title)
-                libraryRepository.setCurrentEpisode(episode.id)
-                playEpisode(episode)
+        lifecycleScope.launch {
+            val imported = withContext(Dispatchers.IO) {
+                LocalAudioImport.importOne(this@MainActivity, uri, libraryRepository)
+            }
+            libraryRepository.setCurrentEpisode(imported.id)
+            playEpisode(imported)
+        }
+    }
+
+    private val openAudioFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { treeUri: Uri? ->
+        if (treeUri == null) return@registerForActivityResult
+        try {
+            contentResolver.takePersistableUriPermission(
+                treeUri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        } catch (_: Exception) { }
+        lifecycleScope.launch {
+            val imported = withContext(Dispatchers.IO) {
+                LocalAudioImport.importTree(this@MainActivity, treeUri, libraryRepository)
+            }
+            if (imported.isNotEmpty()) {
+                libraryRepository.setCurrentEpisode(imported.first().id)
+                playEpisode(imported.first())
             }
         }
     }
@@ -401,49 +420,48 @@ class MainActivity : ComponentActivity() {
                                                     .clickable(
                                                         interactionSource = interactionSource,
                                                         indication = null,
-                                                        onClick = { showNowPlaying = true },
-                                                    ),
+                                                    ) { showNowPlaying = true },
                                             )
                                         }
                                         NavigationBar(containerColor = AuralisColors.Surface) {
                                             NavigationBarItem(
                                                 selected = currentDestination == AuralisDestination.Library,
                                                 onClick = { currentDestination = AuralisDestination.Library },
-                                                icon = {
-                                                    LibraryNavIcon(
-                                                        color = navIconColor(
-                                                            currentDestination == AuralisDestination.Library,
-                                                        ),
-                                                    )
-                                                },
+                                                icon = { LibraryNavIcon(selected = currentDestination == AuralisDestination.Library) },
                                                 label = { Text("کتابخانه", fontSize = AuralisTypeScale.Caption) },
-                                                colors = navColors(),
+                                                colors = NavigationBarItemDefaults.colors(
+                                                    selectedIconColor = AuralisColors.PrimaryBlue,
+                                                    selectedTextColor = AuralisColors.PrimaryBlue,
+                                                    unselectedIconColor = AuralisColors.TextTertiary,
+                                                    unselectedTextColor = AuralisColors.TextTertiary,
+                                                    indicatorColor = Color.Transparent,
+                                                ),
                                             )
                                             NavigationBarItem(
                                                 selected = currentDestination == AuralisDestination.Explore,
                                                 onClick = { currentDestination = AuralisDestination.Explore },
-                                                icon = {
-                                                    ExploreNavIcon(
-                                                        color = navIconColor(
-                                                            currentDestination == AuralisDestination.Explore,
-                                                        ),
-                                                    )
-                                                },
+                                                icon = { ExploreNavIcon(selected = currentDestination == AuralisDestination.Explore) },
                                                 label = { Text("کاوش", fontSize = AuralisTypeScale.Caption) },
-                                                colors = navColors(),
+                                                colors = NavigationBarItemDefaults.colors(
+                                                    selectedIconColor = AuralisColors.PrimaryBlue,
+                                                    selectedTextColor = AuralisColors.PrimaryBlue,
+                                                    unselectedIconColor = AuralisColors.TextTertiary,
+                                                    unselectedTextColor = AuralisColors.TextTertiary,
+                                                    indicatorColor = Color.Transparent,
+                                                ),
                                             )
                                             NavigationBarItem(
                                                 selected = currentDestination == AuralisDestination.Profile,
                                                 onClick = { currentDestination = AuralisDestination.Profile },
-                                                icon = {
-                                                    ProfileNavIcon(
-                                                        color = navIconColor(
-                                                            currentDestination == AuralisDestination.Profile,
-                                                        ),
-                                                    )
-                                                },
+                                                icon = { ProfileNavIcon(selected = currentDestination == AuralisDestination.Profile) },
                                                 label = { Text("پروفایل", fontSize = AuralisTypeScale.Caption) },
-                                                colors = navColors(),
+                                                colors = NavigationBarItemDefaults.colors(
+                                                    selectedIconColor = AuralisColors.PrimaryBlue,
+                                                    selectedTextColor = AuralisColors.PrimaryBlue,
+                                                    unselectedIconColor = AuralisColors.TextTertiary,
+                                                    unselectedTextColor = AuralisColors.TextTertiary,
+                                                    indicatorColor = Color.Transparent,
+                                                ),
                                             )
                                         }
                                     }
@@ -487,6 +505,9 @@ class MainActivity : ComponentActivity() {
                                                     onImportClick = {
                                                         openAudio.launch(arrayOf("audio/*"))
                                                     },
+                                                    onImportFolderClick = {
+                                                        openAudioFolder.launch(null)
+                                                    },
                                                 )
                                             }
                                             AuralisDestination.Explore -> {
@@ -518,27 +539,25 @@ class MainActivity : ComponentActivity() {
                                                         showNowPlaying = true
                                                     },
                                                     onDownloadEpisode = { podcast, catalogEpisode ->
-                                                        if (catalogEpisode.audioUrl.isBlank()) {
-                                                            return@ExploreScreen
-                                                        }
                                                         lifecycleScope.launch {
                                                             libraryRepository.downloadEpisodeOffline(
-                                                                catalogEpisode = catalogEpisode,
-                                                                podcast = podcast,
+                                                                catalogEpisode,
+                                                                podcast,
                                                             )
                                                         }
                                                     },
                                                     onCancelDownload = { _, catalogEpisode ->
-                                                        libraryRepository.cancelDownload(DownloadIdentity(catalogSourceId, catalogEpisode.id))
+                                                        libraryRepository.cancelDownload(
+                                                            DownloadIdentity(catalogSourceId, catalogEpisode.id),
+                                                        )
                                                     },
                                                 )
                                             }
                                             AuralisDestination.Profile -> {
                                                 ProfileScreen(
-                                                    episodeCount = episodes.size,
+                                                    onOpenSettings = { showSettings = true },
                                                     versionName = BuildConfig.VERSION_NAME,
                                                     versionCode = BuildConfig.VERSION_CODE,
-                                                    onOpenSettings = { showSettings = true },
                                                 )
                                             }
                                         }
@@ -553,22 +572,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        controller?.release()
-        controller = null
-        controllerFuture?.let { MediaController.releaseFuture(it) }
-        controllerFuture = null
         super.onDestroy()
+        controllerFuture?.let { MediaController.releaseFuture(it) }
+        controller = null
     }
 }
-
-private fun navIconColor(selected: Boolean): Color =
-    if (selected) AuralisColors.PrimaryBlue else AuralisColors.TextTertiary
-
-@Composable
-private fun navColors() = NavigationBarItemDefaults.colors(
-    selectedIconColor = AuralisColors.PrimaryBlue,
-    selectedTextColor = AuralisColors.PrimaryBlue,
-    indicatorColor = AuralisColors.SurfaceElevated,
-    unselectedIconColor = AuralisColors.TextTertiary,
-    unselectedTextColor = AuralisColors.TextTertiary,
-)
