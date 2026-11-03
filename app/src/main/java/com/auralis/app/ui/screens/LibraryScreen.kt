@@ -291,6 +291,9 @@ private fun LibraryFilterChip(
             labelColor = AuralisColors.TextSecondary,
         ),
         shape = RoundedCornerShape(AuralisCorners.Button),
+        modifier = Modifier.semantics {
+            stateDescription = if (selected) "انتخاب‌شده" else "انتخاب‌نشده"
+        },
     )
 }
 
@@ -312,10 +315,15 @@ private fun EpisodeListItem(
             .semantics {
                 contentDescription = buildString {
                     append(episode.title)
-                    if (badge != null) append(". $badge")
+                    if (badge != null) {
+                        append(". ")
+                        append(badge)
+                    }
                     append(". نگه داشتن برای حذف")
                 }
-                stateDescription = badge
+                if (badge != null) {
+                    stateDescription = badge
+                }
             },
         color = AuralisColors.Surface,
         shape = RoundedCornerShape(AuralisCorners.Card),
