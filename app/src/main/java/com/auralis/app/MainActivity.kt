@@ -111,8 +111,212 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // NOTE: This is a truncated stub for size; full file will be pushed next if this fails
+    private fun applyPlaybackSpeed(speed: Float) {
+        controller?.setPlaybackSpeed(speed.coerceIn(0.5f, 2.0f))
+    }
+
+    private fun playEpisode(episode: Episode) {
+        val c = controller ?: return
+        val playable = localUriAccess.resolvePlayableUri(episode) ?: return
+        val mediaItem = MediaItem.Builder()
+            .setUri(playable)
+            .setMediaId(episode.id)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(episode.title)
+                    .setArtist(episode.podcastName)
+                    .setArtworkUri(episode.artworkUri)
+                    .build(),
+            )
+            .build()
+        c.setMediaItem(mediaItem)
+        c.prepare()
+        c.play()
+        libraryRepository.setCurrentEpisode(episode.id)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        libraryRepository = LibraryRepository.get(this)
+        catalogRepository = CatalogRepository.get(this)
+        playbackPreferences = PlaybackPreferences(this)
+        localUriAccess = LocalUriAccess(this)
+
+        val sessionToken = SessionToken(this, ComponentName(this, PlaybackService::class.java))
+        controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
+        controllerFuture?.addListener({
+            controller = controllerFuture?.get()
+            applyPlaybackSpeed(playbackPreferences.speed)
+        }, MoreExecutors.directExecutor())
+
+        setContent {
+            AuralisTheme {
+                var currentDestination by remember { mutableStateOf(AuralisDestination.Library) }
+                var showNowPlaying by remember { mutableStateOf(false) }
+                var selectedCatalogPodcastId by remember { mutableStateOf<String?>(null) }
+
+                val episodes by libraryRepository.episodes.collectAsState()
+                val currentId by libraryRepository.currentEpisodeId.collectAsState()
+                val catalogSourceId = CatalogConfig.SOURCE_ID
+                val downloadedIdentities by libraryRepository.downloadedIdentities.collectAsState()
+                val downloadingIdentities by libraryRepository.downloadingIdentities.collectAsState()
+                val downloadProgress by libraryRepository.downloadProgress.collectAsState()
+                val downloadErrors by libraryRepository.downloadErrors.collectAsState()
+                val libraryIdentities by libraryRepository.libraryIdentities.collectAsState()
+
+                val isPlaying = controller?.isPlaying == true
+                val currentEpisode = currentId?.let { id -> episodes.find { it.id == id } }
+
+                BackHandler(enabled = showNowPlaying) { showNowPlaying = false }
+                BackHandler(enabled = selectedCatalogPodcastId != null) { selectedCatalogPodcastId = null }
+
+                Surface(modifier = Modifier.fillMaxSize(), color = AuralisColors.BackgroundDeep) {
+                    if (showNowPlaying && currentEpisode != null) {
+                        NowPlayingScreen(
+                            episode = currentEpisode,
+                            isPlaying = isPlaying,
+                            onPlayPause = {
+                                if (isPlaying) controller?.pause() else controller?.play()
+                            },
+                            onSeek = { pos -> controller?.seekTo(pos) },
+                            onBack = { showNowPlaying = false },
+                            positionMs = controller?.currentPosition ?: 0L,
+                            durationMs = controller?.duration?.takeIf { it > 0 } ?: currentEpisode.durationMs,
+                            onSpeedChange = { speed ->
+                                playbackPreferences.speed = speed
+                                applyPlaybackSpeed(speed)
+                            },
+                            currentSpeed = playbackPreferences.speed,
+                        )
+                    } else if (selectedCatalogPodcastId != null) {
+                        val podcast = catalogRepository.podcasts.value.find { it.id == selectedCatalogPodcastId }
+                        if (podcast != null) {
+                            CatalogPodcastDetailScreen(
+                                podcast = podcast,
+                                onBack = { selectedCatalogPodcastId = null },
+                                onPlay = { ep ->
+                                    val episode = libraryRepository.addOrGetStreamEpisode(ep, podcast)
+                                    playEpisode(episode)
+                                    showNowPlaying = true
+                                },
+                                onAddToLibrary = { ep -> libraryRepository.addToLibrary(ep, podcast) },
+                                onDownload = { ep -> libraryRepository.downloadEpisode(ep, podcast) },
+                                isDownloaded = { ep -> libraryRepository.isDownloaded(DownloadIdentity(catalogSourceId, ep.id)) },
+                                isInLibrary = { ep -> libraryRepository.isInLibrary(DownloadIdentity(catalogSourceId, ep.id)) },
+                            )
+                        }
+                    } else {
+                        Scaffold(
+                            containerColor = AuralisColors.BackgroundDeep,
+                            bottomBar = {
+                                Column {
+                                    if (currentEpisode != null) {
+                                        AuralisMiniPlayer(
+                                            state = MiniPlayerState(
+                                                title = currentEpisode.title,
+                                                subtitle = currentEpisode.podcastName,
+                                                isPlaying = isPlaying,
+                                                progress = currentEpisode.progressFraction,
+                                            ),
+                                            onPlayPause = {
+                                                if (isPlaying) controller?.pause() else controller?.play()
+                                            },
+                                            onClick = { showNowPlaying = true },
+                                        )
+                                    }
+                                    NavigationBar(containerColor = AuralisColors.Surface) {
+                                        AuralisDestination.entries.forEach { dest ->
+                                            NavigationBarItem(
+                                                selected = currentDestination == dest,
+                                                onClick = { currentDestination = dest },
+                                                icon = { Text(dest.label) },
+                                                label = { Text(dest.label) },
+                                                colors = NavigationBarItemDefaults.colors(
+                                                    selectedIconColor = AuralisColors.PrimaryBlue,
+                                                    selectedTextColor = AuralisColors.PrimaryBlue,
+                                                    unselectedIconColor = AuralisColors.TextTertiary,
+                                                    unselectedTextColor = AuralisColors.TextTertiary,
+                                                ),
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                        ) { padding ->
+                            Box(Modifier.padding(padding).fillMaxSize()) {
+                                when (currentDestination) {
+                                    AuralisDestination.Library -> {
+                                        LibraryScreen(
+                                            episodes = episodes,
+                                            onEpisodeClick = { episode ->
+                                                playEpisode(episode)
+                                                showNowPlaying = true
+                                            },
+                                            onEpisodeDelete = { episode ->
+                                                libraryRepository.deleteEpisode(episode.id)
+                                            },
+                                            onImportClick = {
+                                                openAudio.launch(arrayOf("audio/*"))
+                                            },
+                                            onImportFolderClick = {
+                                                openAudioFolder.launch(null)
+                                            },
+                                        )
+                                    }
+                                    AuralisDestination.Explore -> {
+                                        ExploreScreen(
+                                            onImportClick = {
+                                                openAudio.launch(arrayOf("audio/*"))
+                                            },
+                                            downloadedIdentities = downloadedIdentities,
+                                            downloadingIdentities = downloadingIdentities,
+                                            downloadProgress = downloadProgress,
+                                            downloadErrors = downloadErrors,
+                                            libraryIdentities = libraryIdentities,
+                                            isDownloaded = libraryRepository::isDownloaded,
+                                            onAddToLibrary = { podcast, catalogEpisode ->
+                                                libraryRepository.addToLibrary(catalogEpisode, podcast)
+                                            },
+                                            onRemoveFromLibrary = { _, catalogEpisode ->
+                                                libraryRepository.removeFromLibrary(
+                                                    DownloadIdentity(catalogSourceId, catalogEpisode.id),
+                                                )
+                                            },
+                                            onDownload = { podcast, catalogEpisode ->
+                                                libraryRepository.downloadEpisode(catalogEpisode, podcast)
+                                            },
+                                            onCancelDownload = { identity ->
+                                                libraryRepository.cancelDownload(identity)
+                                            },
+                                            onPlay = { podcast, catalogEpisode ->
+                                                val episode = libraryRepository.addOrGetStreamEpisode(catalogEpisode, podcast)
+                                                playEpisode(episode)
+                                                showNowPlaying = true
+                                            },
+                                            onOpenPodcast = { podcast ->
+                                                selectedCatalogPodcastId = podcast.id
+                                            },
+                                        )
+                                    }
+                                    AuralisDestination.Profile -> {
+                                        ProfileScreen(episodeCount = episodes.size)
+                                    }
+                                    AuralisDestination.Settings -> {
+                                        SettingsScreen()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        controllerFuture?.let { MediaController.releaseFuture(it) }
+        controller = null
     }
 }
