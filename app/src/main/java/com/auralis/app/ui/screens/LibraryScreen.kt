@@ -36,12 +36,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.auralis.app.data.Episode
 import com.auralis.app.ui.components.AuralisEmptyState
 import com.auralis.app.ui.theme.AuralisColors
@@ -61,6 +63,7 @@ fun LibraryScreen(
     onEpisodeClick: (Episode) -> Unit,
     onEpisodeDelete: (Episode) -> Unit,
     onImportClick: () -> Unit,
+    onImportFolderClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var pendingDelete by remember { mutableStateOf<Episode?>(null) }
@@ -102,16 +105,29 @@ fun LibraryScreen(
                 fontSize = AuralisTypeScale.TitleLargeMax,
                 fontWeight = FontWeight.SemiBold,
             )
-            FilledTonalButton(
-                onClick = onImportClick,
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = AuralisColors.SurfaceElevated,
-                    contentColor = AuralisColors.TextPrimary,
-                ),
-                shape = RoundedCornerShape(AuralisCorners.Button),
-                modifier = Modifier.semantics { contentDescription = "افزودن فایل صوتی از حافظه" },
-            ) {
-                Text("افزودن فایل", fontSize = AuralisTypeScale.Caption)
+            Row(horizontalArrangement = Arrangement.spacedBy(AuralisSpacing.X2)) {
+                FilledTonalButton(
+                    onClick = onImportClick,
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = AuralisColors.SurfaceElevated,
+                        contentColor = AuralisColors.TextPrimary,
+                    ),
+                    shape = RoundedCornerShape(AuralisCorners.Button),
+                    modifier = Modifier.semantics { contentDescription = "افزودن فایل صوتی از حافظه" },
+                ) {
+                    Text("افزودن فایل", fontSize = AuralisTypeScale.Caption)
+                }
+                FilledTonalButton(
+                    onClick = onImportFolderClick,
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = AuralisColors.SurfaceElevated,
+                        contentColor = AuralisColors.TextPrimary,
+                    ),
+                    shape = RoundedCornerShape(AuralisCorners.Button),
+                    modifier = Modifier.semantics { contentDescription = "افزودن پوشه صوتی از حافظه" },
+                ) {
+                    Text("افزودن پوشه", fontSize = AuralisTypeScale.Caption)
+                }
             }
         }
 
@@ -128,16 +144,17 @@ fun LibraryScreen(
                 onClick = { filter = LibraryFilter.All },
             )
             LibraryFilterChip(
-                label = "دانلود شده‌ها (${downloaded.size})",
+                label = "دانلود شده (${downloaded.size})",
                 selected = filter == LibraryFilter.Downloaded,
                 onClick = { filter = LibraryFilter.Downloaded },
             )
             LibraryFilterChip(
-                label = "فایل‌های من (${localOnly.size})",
+                label = "محلی (${localOnly.size})",
                 selected = filter == LibraryFilter.LocalFiles,
                 onClick = { filter = LibraryFilter.LocalFiles },
             )
         }
+
         Spacer(modifier = Modifier.height(AuralisSpacing.X3))
 
         if (isEmpty) {
@@ -149,7 +166,7 @@ fun LibraryScreen(
                 )
                 LibraryFilter.LocalFiles -> Triple(
                     "فایل محلی نیست",
-                    "از حافظه گوشی فایل صوتی اضافه کنید.",
+                    "از حافظه گوشی فایل یا پوشه صوتی اضافه کنید.",
                     "افزودن فایل صوتی",
                 )
                 LibraryFilter.All -> Triple(
@@ -198,7 +215,7 @@ fun LibraryScreen(
                                     text = "دانلود شده‌ها",
                                     color = AuralisColors.TextSecondary,
                                     fontSize = AuralisTypeScale.Caption,
-                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(vertical = AuralisSpacing.X2),
                                 )
                             }
                             items(downloaded, key = { "dl-${it.id}" }) { episode ->
@@ -213,21 +230,16 @@ fun LibraryScreen(
                         if (restWhenAll.isNotEmpty()) {
                             item {
                                 Text(
-                                    text = if (downloaded.isNotEmpty()) "سایر" else "همه موارد",
+                                    text = "سایر",
                                     color = AuralisColors.TextSecondary,
                                     fontSize = AuralisTypeScale.Caption,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(top = AuralisSpacing.X2),
+                                    modifier = Modifier.padding(vertical = AuralisSpacing.X2),
                                 )
                             }
-                            items(restWhenAll, key = { it.id }) { episode ->
-                                val badge = when {
-                                    episode.remoteId != null -> "استریم"
-                                    else -> null
-                                }
+                            items(restWhenAll, key = { "rest-${it.id}" }) { episode ->
                                 EpisodeListItem(
                                     episode = episode,
-                                    badge = badge,
+                                    badge = null,
                                     onClick = { onEpisodeClick(episode) },
                                     onLongClick = { pendingDelete = episode },
                                 )
@@ -239,29 +251,25 @@ fun LibraryScreen(
         }
     }
 
-    pendingDelete?.let { episode ->
+    val target = pendingDelete
+    if (target != null) {
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("حذف اپیزود") },
-            text = { Text("«${episode.title}» از کتابخانه حذف شود؟") },
+            title = { Text("حذف از کتابخانه؟") },
+            text = {
+                Text("عضویت «${target.title}» حذف می‌شود. فایل دانلود خصوصی در صورت وجود پاک نمی‌شود.")
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        onEpisodeDelete(episode)
+                        onEpisodeDelete(target)
                         pendingDelete = null
                     },
-                ) {
-                    Text("حذف", color = AuralisColors.Error)
-                }
+                ) { Text("حذف") }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) {
-                    Text("انصراف")
-                }
+                TextButton(onClick = { pendingDelete = null }) { Text("انصراف") }
             },
-            containerColor = AuralisColors.Surface,
-            titleContentColor = AuralisColors.TextPrimary,
-            textContentColor = AuralisColors.TextSecondary,
         )
     }
 }
@@ -275,18 +283,14 @@ private fun LibraryFilterChip(
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(text = label, fontSize = AuralisTypeScale.Caption) },
+        label = { Text(label) },
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = AuralisColors.PrimaryBlue,
-            selectedLabelColor = AuralisColors.BackgroundDeep,
-            containerColor = AuralisColors.SurfaceElevated,
+            selectedLabelColor = AuralisColors.TextPrimary,
+            containerColor = AuralisColors.Surface,
             labelColor = AuralisColors.TextSecondary,
         ),
         shape = RoundedCornerShape(AuralisCorners.Button),
-        modifier = Modifier.semantics {
-            contentDescription = label
-            stateDescription = if (selected) "انتخاب‌شده" else "انتخاب‌نشده"
-        },
     )
 }
 
@@ -294,31 +298,25 @@ private fun LibraryFilterChip(
 @Composable
 private fun EpisodeListItem(
     episode: Episode,
-    badge: String? = null,
+    badge: String?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(AuralisCorners.Card))
-            .semantics {
-                contentDescription = buildString {
-                    append(episode.title)
-                    append(". ")
-                    append(episode.podcastName)
-                    if (badge != null) {
-                        append(". ")
-                        append(badge)
-                    }
-                    append(". برای حذف، لمس طولانی کنید.")
-                }
-                if (badge != null) stateDescription = badge
-            }
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
-            ),
+            )
+            .semantics {
+                contentDescription = buildString {
+                    append(episode.title)
+                    if (badge != null) append(". $badge")
+                    append(". نگه داشتن برای حذف")
+                }
+                stateDescription = badge
+            },
         color = AuralisColors.Surface,
         shape = RoundedCornerShape(AuralisCorners.Card),
     ) {
@@ -335,12 +333,25 @@ private fun EpisodeListItem(
                         Brush.linearGradient(
                             colors = listOf(AuralisColors.PrimaryBlue, AuralisColors.PrimaryViolet),
                         ),
-                    ),
+                    )
+                    .semantics { contentDescription = "جلد ${episode.title}" },
                 contentAlignment = Alignment.Center,
-                content = {
-                    Text("A", color = AuralisColors.TextPrimary, fontWeight = FontWeight.Bold)
-                },
-            )
+            ) {
+                Text(
+                    text = episode.title.trim().take(1).ifBlank { "A" },
+                    color = AuralisColors.TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                )
+                val art = episode.artworkUri
+                if (art != null) {
+                    AsyncImage(
+                        model = art,
+                        contentDescription = "تصویر جلد ${episode.title}",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
