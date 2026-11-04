@@ -2,6 +2,7 @@ package com.auralis.app
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.Uri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -12,28 +13,37 @@ import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionError
+import com.auralis.app.data.db.AuralisDatabase
+import com.auralis.app.data.db.EpisodeEntity
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.SettableFuture
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Background playback with notification + lock-screen controls (Media3 library session).
  *
- * Android Auto (#40):
- * - Service is [MediaLibraryService] so Auto/system can connect for browse + play.
- * - Stub library callback exposes a browsable root; episode children come in #41.
+ * Android Auto:
+ * - [MediaLibraryService] + [MediaLibrarySession] for system/Auto browse and play (#40).
+ * - Library tree: root → کتابخانه → isInLibrary episodes from Room (#41).
+ * - Browse/play does **not** create Library membership (architecture #24).
  *
  * Issue #12 audit (code-side):
  * - Audio focus: handleAudioFocus = true
  * - Headset unplug / BT disconnect: setHandleAudioBecomingNoisy(true) → pause
  * - Screen-off: WAKE_MODE_LOCAL while playing
  * - Notification / lock screen: MediaSession + sessionActivity → MainActivity
- * - Playing UI must mirror Player.isPlaying (MainActivity / MiniPlayer), never optimistic click
  * - Task removed from recents: keep service if playWhenReady so audio continues
  */
 class PlaybackService : MediaLibraryService() {
 
     private var mediaLibrarySession: MediaLibrarySession? = null
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val dao by lazy { AuralisDatabase.get(this).episodeDao() }
 
     private val libraryCallback = object : MediaLibrarySession.Callback {
         override fun onGetLibraryRoot(
@@ -41,17 +51,7 @@ class PlaybackService : MediaLibraryService() {
             browser: MediaSession.ControllerInfo,
             params: LibraryParams?,
         ): ListenableFuture<LibraryResult<MediaItem>> {
-            val root = MediaItem.Builder()
-                .setMediaId(LIBRARY_ROOT_ID)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle("Auralis")
-                        .setIsBrowsable(true)
-                        .setIsPlayable(false)
-                        .build(),
-                )
-                .build()
-            return Futures.immediateFuture(LibraryResult.ofItem(root, params))
+            return Futures.immediateFuture(LibraryResult.ofItem(rootItem(), params))
         }
 
         override fun onGetChildren(
@@ -62,10 +62,21 @@ class PlaybackService : MediaLibraryService() {
             pageSize: Int,
             params: LibraryParams?,
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-            // Episode listing from Room is implemented in #41.
-            return Futures.immediateFuture(
-                LibraryResult.ofItemList(ImmutableList.of(), params),
-            )
+            return suspendFuture {
+                when (parentId) {
+                    LIBRARY_ROOT_ID -> {
+                        LibraryResult.ofItemList(ImmutableList.of(libraryFolderItem()), params)
+                    }
+                    LIBRARY_FOLDER_ID -> {
+                        val episodes = dao.getLibraryEpisodes()
+                        val start = (page * pageSize).coerceAtMost(episodes.size)
+                        val end = (start + pageSize).coerceAtMost(episodes.size)
+                        val pageItems = episodes.subList(start, end).map { it.toBrowsableMediaItem() }
+                        LibraryResult.ofItemList(ImmutableList.copyOf(pageItems), params)
+                    }
+                    else -> LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+                }
+            }
         }
 
         override fun onGetItem(
@@ -73,20 +84,45 @@ class PlaybackService : MediaLibraryService() {
             browser: MediaSession.ControllerInfo,
             mediaId: String,
         ): ListenableFuture<LibraryResult<MediaItem>> {
-            if (mediaId == LIBRARY_ROOT_ID) {
-                val root = MediaItem.Builder()
-                    .setMediaId(LIBRARY_ROOT_ID)
-                    .setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle("Auralis")
-                            .setIsBrowsable(true)
-                            .setIsPlayable(false)
-                            .build(),
-                    )
-                    .build()
-                return Futures.immediateFuture(LibraryResult.ofItem(root, /* params= */ null))
+            return suspendFuture {
+                when {
+                    mediaId == LIBRARY_ROOT_ID -> LibraryResult.ofItem(rootItem(), null)
+                    mediaId == LIBRARY_FOLDER_ID -> LibraryResult.ofItem(libraryFolderItem(), null)
+                    mediaId.startsWith(EPISODE_ID_PREFIX) -> {
+                        val id = mediaId.removePrefix(EPISODE_ID_PREFIX)
+                        val entity = dao.getById(id)
+                        if (entity != null) {
+                            LibraryResult.ofItem(entity.toBrowsableMediaItem(), null)
+                        } else {
+                            LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+                        }
+                    }
+                    else -> LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+                }
             }
-            return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_BAD_VALUE))
+        }
+
+        override fun onSetMediaItems(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: MutableList<MediaItem>,
+            startIndex: Int,
+            startPositionMs: Long,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            return suspendFuture {
+                val resolved = mediaItems.map { resolvePlayable(it) }
+                MediaSession.MediaItemsWithStartPosition(resolved, startIndex, startPositionMs)
+            }
+        }
+
+        override fun onAddMediaItems(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: MutableList<MediaItem>,
+        ): ListenableFuture<MutableList<MediaItem>> {
+            return suspendFuture {
+                mediaItems.map { resolvePlayable(it) }.toMutableList()
+            }
         }
     }
 
@@ -122,10 +158,6 @@ class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
         mediaLibrarySession
 
-    /**
-     * If the user swipes the app away while audio should still play, keep the service.
-     * Otherwise stop so we do not leak a silent session.
-     */
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = mediaLibrarySession?.player
         val keepAlive = player != null &&
@@ -135,7 +167,6 @@ class PlaybackService : MediaLibraryService() {
         if (!keepAlive) {
             stopSelf()
         }
-        // When keepAlive: do not call stopSelf(); MediaLibraryService stays for notification controls.
     }
 
     override fun onDestroy() {
@@ -147,7 +178,91 @@ class PlaybackService : MediaLibraryService() {
         super.onDestroy()
     }
 
+    private suspend fun resolvePlayable(item: MediaItem): MediaItem {
+        val mediaId = item.mediaId ?: return item
+        if (!mediaId.startsWith(EPISODE_ID_PREFIX)) return item
+        val id = mediaId.removePrefix(EPISODE_ID_PREFIX)
+        val entity = dao.getById(id) ?: return item
+        val playUri = entity.localUri?.let { Uri.parse(it) }
+            ?: entity.audioUrl?.let { Uri.parse(it) }
+            ?: return item
+        return entity.toPlayableMediaItem(playUri)
+    }
+
+    private fun <T> suspendFuture(block: suspend () -> T): ListenableFuture<T> {
+        val future = SettableFuture.create<T>()
+        serviceScope.launch {
+            try {
+                future.set(block())
+            } catch (t: Throwable) {
+                future.setException(t)
+            }
+        }
+        return future
+    }
+
     companion object {
         const val LIBRARY_ROOT_ID = "auralis_root"
+        const val LIBRARY_FOLDER_ID = "auralis_library"
+        const val EPISODE_ID_PREFIX = "episode:"
+
+        private fun rootItem(): MediaItem =
+            MediaItem.Builder()
+                .setMediaId(LIBRARY_ROOT_ID)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle("Auralis")
+                        .setIsBrowsable(true)
+                        .setIsPlayable(false)
+                        .build(),
+                )
+                .build()
+
+        private fun libraryFolderItem(): MediaItem =
+            MediaItem.Builder()
+                .setMediaId(LIBRARY_FOLDER_ID)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle("کتابخانه")
+                        .setIsBrowsable(true)
+                        .setIsPlayable(false)
+                        .build(),
+                )
+                .build()
+
+        private fun EpisodeEntity.toBrowsableMediaItem(): MediaItem {
+            val metadata = MediaMetadata.Builder()
+                .setTitle(title)
+                .setArtist(podcastName)
+                .setIsBrowsable(false)
+                .setIsPlayable(true)
+                .apply {
+                    if (durationMs > 0L) setDurationMs(durationMs)
+                    artworkUri?.let { setArtworkUri(Uri.parse(it)) }
+                }
+                .build()
+            return MediaItem.Builder()
+                .setMediaId(EPISODE_ID_PREFIX + id)
+                .setMediaMetadata(metadata)
+                .build()
+        }
+
+        private fun EpisodeEntity.toPlayableMediaItem(playUri: Uri): MediaItem {
+            val metadata = MediaMetadata.Builder()
+                .setTitle(title)
+                .setArtist(podcastName)
+                .setIsBrowsable(false)
+                .setIsPlayable(true)
+                .apply {
+                    if (durationMs > 0L) setDurationMs(durationMs)
+                    artworkUri?.let { setArtworkUri(Uri.parse(it)) }
+                }
+                .build()
+            return MediaItem.Builder()
+                .setMediaId(EPISODE_ID_PREFIX + id)
+                .setUri(playUri)
+                .setMediaMetadata(metadata)
+                .build()
+        }
     }
 }

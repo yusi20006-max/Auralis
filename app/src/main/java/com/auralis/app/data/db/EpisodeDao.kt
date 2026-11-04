@@ -13,6 +13,12 @@ interface EpisodeDao {
     @Query("SELECT * FROM episodes ORDER BY lastPlayedAt DESC, title ASC")
     fun observeAll(): Flow<List<EpisodeEntity>>
 
+    @Query(
+        "SELECT * FROM episodes WHERE isInLibrary = 1 " +
+            "ORDER BY lastPlayedAt DESC, title ASC",
+    )
+    suspend fun getLibraryEpisodes(): List<EpisodeEntity>
+
     @Query("SELECT * FROM episodes WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): EpisodeEntity?
 
