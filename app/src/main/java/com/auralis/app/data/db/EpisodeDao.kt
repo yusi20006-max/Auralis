@@ -19,6 +19,18 @@ interface EpisodeDao {
     )
     suspend fun getLibraryEpisodes(): List<EpisodeEntity>
 
+    @Query(
+        "SELECT * FROM episodes WHERE localUri IS NOT NULL " +
+            "ORDER BY lastPlayedAt DESC, title ASC",
+    )
+    suspend fun getDownloadedEpisodes(): List<EpisodeEntity>
+
+    @Query(
+        "SELECT * FROM episodes WHERE lastPlayedAt IS NOT NULL " +
+            "ORDER BY lastPlayedAt DESC LIMIT :limit",
+    )
+    suspend fun getRecentlyPlayed(limit: Int = 50): List<EpisodeEntity>
+
     @Query("SELECT * FROM episodes WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): EpisodeEntity?
 

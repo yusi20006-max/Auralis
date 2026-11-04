@@ -4,7 +4,7 @@
 
 ## Current development baseline
 
-- App version: **0.2.1** (versionCode **3**)
+- App version: **0.2.2** (versionCode **4**)
 - Application ID: **com.auralis.app**
 - Minimum Android: API 26; compile/target SDK: 36/36
 - Room schema: version **3**
@@ -18,7 +18,7 @@
 | Local media import and offline playback | Implemented; Room-backed Library |
 | Playback position persistence | Implemented; regression-tested |
 | Media3 background playback and system controls | Implemented in code; physical-device validation remains owner-run |
-| Android Auto media declaration | Manifest + `automotive_app_desc` (see [docs/android-auto.md](docs/android-auto.md)); in-car browse requires MediaLibraryService |
+| Android Auto media | Manifest + MediaLibraryService browse (Library / Downloads / Recent); DHU/car validation owner-run — see [docs/android-auto.md](docs/android-auto.md) |
 | Catalog browse and stream | Sample Catalog; no production hosting |
 | Play, Add to Library and Download | Separate actions and persistence semantics |
 | Private offline downloads | Source-aware storage, retry/cancel and partial-file cleanup |

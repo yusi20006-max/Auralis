@@ -27,16 +27,16 @@ import kotlinx.coroutines.launch
 /**
  * Background playback with notification + lock-screen controls (Media3 library session).
  *
- * Android Auto:
- * - [MediaLibraryService] + [MediaLibrarySession] for system/Auto browse and play (#40).
- * - Library tree: root → کتابخانه → isInLibrary episodes from Room (#41).
+ * Android Auto media path (#38–#42):
+ * - [MediaLibraryService] so Auto/system can browse and play.
+ * - Tree: root → کتابخانه | دانلودها | اخیراً پخش‌شده → episode:{id}.
  * - Browse/play does **not** create Library membership (architecture #24).
  *
  * Issue #12 audit (code-side):
  * - Audio focus: handleAudioFocus = true
  * - Headset unplug / BT disconnect: setHandleAudioBecomingNoisy(true) → pause
  * - Screen-off: WAKE_MODE_LOCAL while playing
- * - Notification / lock screen: MediaSession + sessionActivity → MainActivity
+ * - Notification / lock screen: sessionActivity → MainActivity
  * - Task removed from recents: keep service if playWhenReady so audio continues
  */
 class PlaybackService : MediaLibraryService() {
@@ -65,14 +65,23 @@ class PlaybackService : MediaLibraryService() {
             return suspendFuture {
                 when (parentId) {
                     LIBRARY_ROOT_ID -> {
-                        LibraryResult.ofItemList(ImmutableList.of(libraryFolderItem()), params)
+                        LibraryResult.ofItemList(
+                            ImmutableList.of(
+                                folderItem(LIBRARY_FOLDER_ID, "کتابخانه"),
+                                folderItem(DOWNLOADS_FOLDER_ID, "دانلودها"),
+                                folderItem(RECENT_FOLDER_ID, "اخیراً پخش‌شده"),
+                            ),
+                            params,
+                        )
                     }
                     LIBRARY_FOLDER_ID -> {
-                        val episodes = dao.getLibraryEpisodes()
-                        val start = (page * pageSize).coerceAtMost(episodes.size)
-                        val end = (start + pageSize).coerceAtMost(episodes.size)
-                        val pageItems = episodes.subList(start, end).map { it.toBrowsableMediaItem() }
-                        LibraryResult.ofItemList(ImmutableList.copyOf(pageItems), params)
+                        pagedEpisodeResult(dao.getLibraryEpisodes(), page, pageSize, params)
+                    }
+                    DOWNLOADS_FOLDER_ID -> {
+                        pagedEpisodeResult(dao.getDownloadedEpisodes(), page, pageSize, params)
+                    }
+                    RECENT_FOLDER_ID -> {
+                        pagedEpisodeResult(dao.getRecentlyPlayed(50), page, pageSize, params)
                     }
                     else -> LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                 }
@@ -87,7 +96,12 @@ class PlaybackService : MediaLibraryService() {
             return suspendFuture {
                 when {
                     mediaId == LIBRARY_ROOT_ID -> LibraryResult.ofItem(rootItem(), null)
-                    mediaId == LIBRARY_FOLDER_ID -> LibraryResult.ofItem(libraryFolderItem(), null)
+                    mediaId == LIBRARY_FOLDER_ID ->
+                        LibraryResult.ofItem(folderItem(LIBRARY_FOLDER_ID, "کتابخانه"), null)
+                    mediaId == DOWNLOADS_FOLDER_ID ->
+                        LibraryResult.ofItem(folderItem(DOWNLOADS_FOLDER_ID, "دانلودها"), null)
+                    mediaId == RECENT_FOLDER_ID ->
+                        LibraryResult.ofItem(folderItem(RECENT_FOLDER_ID, "اخیراً پخش‌شده"), null)
                     mediaId.startsWith(EPISODE_ID_PREFIX) -> {
                         val id = mediaId.removePrefix(EPISODE_ID_PREFIX)
                         val entity = dao.getById(id)
@@ -204,6 +218,8 @@ class PlaybackService : MediaLibraryService() {
     companion object {
         const val LIBRARY_ROOT_ID = "auralis_root"
         const val LIBRARY_FOLDER_ID = "auralis_library"
+        const val DOWNLOADS_FOLDER_ID = "auralis_downloads"
+        const val RECENT_FOLDER_ID = "auralis_recent"
         const val EPISODE_ID_PREFIX = "episode:"
 
         private fun rootItem(): MediaItem =
@@ -218,17 +234,29 @@ class PlaybackService : MediaLibraryService() {
                 )
                 .build()
 
-        private fun libraryFolderItem(): MediaItem =
+        private fun folderItem(id: String, title: String): MediaItem =
             MediaItem.Builder()
-                .setMediaId(LIBRARY_FOLDER_ID)
+                .setMediaId(id)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
-                        .setTitle("کتابخانه")
+                        .setTitle(title)
                         .setIsBrowsable(true)
                         .setIsPlayable(false)
                         .build(),
                 )
                 .build()
+
+        private fun pagedEpisodeResult(
+            episodes: List<EpisodeEntity>,
+            page: Int,
+            pageSize: Int,
+            params: MediaLibraryService.LibraryParams?,
+        ): LibraryResult<ImmutableList<MediaItem>> {
+            val start = (page * pageSize).coerceAtMost(episodes.size)
+            val end = (start + pageSize).coerceAtMost(episodes.size)
+            val pageItems = episodes.subList(start, end).map { it.toBrowsableMediaItem() }
+            return LibraryResult.ofItemList(ImmutableList.copyOf(pageItems), params)
+        }
 
         private fun EpisodeEntity.toBrowsableMediaItem(): MediaItem {
             val metadata = MediaMetadata.Builder()
@@ -238,7 +266,10 @@ class PlaybackService : MediaLibraryService() {
                 .setIsPlayable(true)
                 .apply {
                     if (durationMs > 0L) setDurationMs(durationMs)
-                    artworkUri?.let { setArtworkUri(Uri.parse(it)) }
+                    artworkUri?.let { raw ->
+                        // Prefer content:// / https for Auto; still pass stored URI when present.
+                        setArtworkUri(Uri.parse(raw))
+                    }
                 }
                 .build()
             return MediaItem.Builder()
