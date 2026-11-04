@@ -460,7 +460,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                             ) { padding ->
-                                Box(Modifier = Modifier.fillMaxSize().padding(padding)) {
+                                Box(modifier = Modifier.fillMaxSize().padding(padding)) {
                                     when (currentDestination) {
                                         AuralisDestination.Library -> {
                                             LibraryScreen(
@@ -476,9 +476,7 @@ class MainActivity : ComponentActivity() {
                                                     showNowPlaying = true
                                                 },
                                                 onEpisodeDelete = { episode ->
-                                                    lifecycleScope.launch {
-                                                        libraryRepository.removeFromLibrary(episode.id)
-                                                    }
+                                                    libraryRepository.deleteEpisode(episode.id)
                                                 },
                                             )
                                         }
