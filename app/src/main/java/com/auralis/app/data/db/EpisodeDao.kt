@@ -48,6 +48,7 @@ interface EpisodeDao {
     /**
      * Serializes the lookup and insert in one Room transaction so concurrent
      * repository calls cannot both insert a row for the same local URI.
+     * Re-import may fill artwork/duration that a previous pass missed.
      */
     @Transaction
     suspend fun getOrInsertLocalEpisode(episode: EpisodeEntity): EpisodeEntity {
@@ -56,9 +57,18 @@ interface EpisodeDao {
         }
         val existing = getByLocalUri(localUri)
         if (existing != null) {
-            val member = existing.copy(isInLibrary = true)
-            if (member != existing) update(member)
-            return member
+            val merged = existing.copy(
+                isInLibrary = true,
+                artworkUri = existing.artworkUri ?: episode.artworkUri,
+                durationMs = if (existing.durationMs > 0L) existing.durationMs else episode.durationMs,
+                title = if (existing.title.isNotBlank() && existing.title != "اپیزود بدون عنوان") {
+                    existing.title
+                } else {
+                    episode.title
+                },
+            )
+            if (merged != existing) update(merged)
+            return merged
         }
         upsert(episode)
         return episode

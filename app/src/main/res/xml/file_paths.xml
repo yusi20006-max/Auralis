@@ -2,4 +2,6 @@
 <paths>
     <!-- App-private files only — never public external storage -->
     <files-path name="auralis_private" path="auralis_private/" />
+    <!-- Cached embedded / folder cover art extracted on local import -->
+    <files-path name="artwork" path="artwork/" />
 </paths>
