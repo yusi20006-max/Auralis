@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.auralis.app.data.Episode
 import com.auralis.app.ui.components.AuralisWaveform
 import com.auralis.app.ui.theme.AuralisColors
@@ -131,6 +133,7 @@ fun NowPlayingScreen(
 
         Spacer(modifier = Modifier.height(AuralisSpacing.X2))
 
+        val artworkUri = episode?.artworkUri
         Box(
             modifier = Modifier
                 .size(220.dp)
@@ -145,15 +148,23 @@ fun NowPlayingScreen(
                     stateDescription = title
                 },
             contentAlignment = Alignment.Center,
-            content = {
+        ) {
+            if (artworkUri != null) {
+                AsyncImage(
+                    model = artworkUri,
+                    contentDescription = "تصویر جلد $title",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
                 Text(
-                    text = "A",
+                    text = title.firstOrNull()?.uppercaseChar()?.toString() ?: "A",
                     color = AuralisColors.TextPrimary,
                     fontSize = AuralisTypeScale.HeroMax * 2,
                     fontWeight = FontWeight.Bold,
                 )
-            },
-        )
+            }
+        }
 
         Spacer(modifier = Modifier.height(AuralisSpacing.X4))
 
