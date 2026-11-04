@@ -12,7 +12,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,7 +27,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -65,7 +63,6 @@ import com.auralis.app.ui.screens.SettingsScreen
 import com.auralis.app.ui.theme.AuralisColors
 import com.auralis.app.ui.theme.AuralisSpacing
 import com.auralis.app.ui.theme.AuralisTheme
-import com.auralis.app.ui.theme.AuralisTypeScale
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -406,7 +403,6 @@ class MainActivity : ComponentActivity() {
                                 bottomBar = {
                                     Column {
                                         if (miniPlayerVisible) {
-                                            val interactionSource = remember { MutableInteractionSource() }
                                             AuralisMiniPlayer(
                                                 title = trackTitle,
                                                 state = miniState,
@@ -417,19 +413,22 @@ class MainActivity : ComponentActivity() {
                                                     .padding(
                                                         horizontal = AuralisSpacing.X4,
                                                         vertical = AuralisSpacing.X2,
-                                                    ),
+                                                    )
+                                                    .clickable { showNowPlaying = true },
                                             )
                                         }
                                         lastDownloadError?.let { err ->
                                             AuralisErrorBanner(
                                                 message = err,
-                                                onDismiss = { libraryRepository.clearDownloadError() },
+                                                actionLabel = "باشه",
+                                                onAction = { libraryRepository.clearDownloadError() },
                                             )
                                         }
                                         if (hasPlayerError && playerErrorMessage != null) {
                                             AuralisErrorBanner(
                                                 message = playerErrorMessage!!,
-                                                onDismiss = {
+                                                actionLabel = "باشه",
+                                                onAction = {
                                                     hasPlayerError = false
                                                     playerErrorMessage = null
                                                 },
