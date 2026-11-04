@@ -10,19 +10,18 @@ Auralis targets the standard **media** path for Android Auto (not a custom Car A
   - `androidx.media3.session.MediaSessionService`
   - `android.media.browse.MediaBrowserService` (compatibility)
 
-## Current limitation (issue #39 scope)
+## MediaLibraryService (#40)
 
-Declaring Auto support does **not** by itself provide an in-car browse tree.
+`PlaybackService` extends **MediaLibraryService** and exposes a **MediaLibrarySession** with a stub callback:
 
-Until `PlaybackService` is upgraded to **MediaLibraryService** with a library callback:
+- `onGetLibraryRoot` → browsable root id `auralis_root` (title "Auralis")
+- `onGetChildren` → empty list until Library episodes are wired (#41)
 
-- The app may appear (or be discoverable) as a media session source depending on OS/Auto version.
-- Selecting episodes from a full in-car hierarchy is **not** complete.
+Phone playback, notification, and lock-screen controls remain driven by the same ExoPlayer instance and session activity → `MainActivity`.
 
-Follow-up work:
+## Remaining work
 
-- #40 — upgrade to `MediaLibraryService`
-- #41 — browse root + Library episodes from Room
+- #41 — browse root children: Library episodes from Room + play from Auto
 - #42 — downloads / recent + artwork for Auto
 - #43 — DHU test checklist
 - #44 — Play Console readiness

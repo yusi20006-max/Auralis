@@ -4,13 +4,24 @@ import android.app.PendingIntent
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionError
+import com.google.common.collect.ImmutableList
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 
 /**
- * Background playback with notification + lock-screen controls (Media3 session).
+ * Background playback with notification + lock-screen controls (Media3 library session).
+ *
+ * Android Auto (#40):
+ * - Service is [MediaLibraryService] so Auto/system can connect for browse + play.
+ * - Stub library callback exposes a browsable root; episode children come in #41.
  *
  * Issue #12 audit (code-side):
  * - Audio focus: handleAudioFocus = true
@@ -20,9 +31,64 @@ import androidx.media3.session.MediaSessionService
  * - Playing UI must mirror Player.isPlaying (MainActivity / MiniPlayer), never optimistic click
  * - Task removed from recents: keep service if playWhenReady so audio continues
  */
-class PlaybackService : MediaSessionService() {
+class PlaybackService : MediaLibraryService() {
 
-    private var mediaSession: MediaSession? = null
+    private var mediaLibrarySession: MediaLibrarySession? = null
+
+    private val libraryCallback = object : MediaLibrarySession.Callback {
+        override fun onGetLibraryRoot(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<MediaItem>> {
+            val root = MediaItem.Builder()
+                .setMediaId(LIBRARY_ROOT_ID)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle("Auralis")
+                        .setIsBrowsable(true)
+                        .setIsPlayable(false)
+                        .build(),
+                )
+                .build()
+            return Futures.immediateFuture(LibraryResult.ofItem(root, params))
+        }
+
+        override fun onGetChildren(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            parentId: String,
+            page: Int,
+            pageSize: Int,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+            // Episode listing from Room is implemented in #41.
+            return Futures.immediateFuture(
+                LibraryResult.ofItemList(ImmutableList.of(), params),
+            )
+        }
+
+        override fun onGetItem(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            mediaId: String,
+        ): ListenableFuture<LibraryResult<MediaItem>> {
+            if (mediaId == LIBRARY_ROOT_ID) {
+                val root = MediaItem.Builder()
+                    .setMediaId(LIBRARY_ROOT_ID)
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle("Auralis")
+                            .setIsBrowsable(true)
+                            .setIsPlayable(false)
+                            .build(),
+                    )
+                    .build()
+                return Futures.immediateFuture(LibraryResult.ofItem(root, /* params= */ null))
+            }
+            return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_BAD_VALUE))
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -48,20 +114,20 @@ class PlaybackService : MediaSessionService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        mediaSession = MediaSession.Builder(this, player)
+        mediaLibrarySession = MediaLibrarySession.Builder(this, player, libraryCallback)
             .setSessionActivity(sessionActivity)
             .build()
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
-        mediaSession
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
+        mediaLibrarySession
 
     /**
      * If the user swipes the app away while audio should still play, keep the service.
      * Otherwise stop so we do not leak a silent session.
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
-        val player = mediaSession?.player
+        val player = mediaLibrarySession?.player
         val keepAlive = player != null &&
             (player.isPlaying || player.playWhenReady) &&
             player.playbackState != Player.STATE_ENDED &&
@@ -69,15 +135,19 @@ class PlaybackService : MediaSessionService() {
         if (!keepAlive) {
             stopSelf()
         }
-        // When keepAlive: do not call stopSelf(); MediaSessionService stays for notification controls.
+        // When keepAlive: do not call stopSelf(); MediaLibraryService stays for notification controls.
     }
 
     override fun onDestroy() {
-        mediaSession?.run {
+        mediaLibrarySession?.run {
             player.release()
             release()
         }
-        mediaSession = null
+        mediaLibrarySession = null
         super.onDestroy()
+    }
+
+    companion object {
+        const val LIBRARY_ROOT_ID = "auralis_root"
     }
 }
