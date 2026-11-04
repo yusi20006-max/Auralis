@@ -59,7 +59,7 @@ interface EpisodeDao {
         if (existing != null) {
             val merged = existing.copy(
                 isInLibrary = true,
-                artworkUri = existing.artworkUri ?: episode.artworkUri,
+                artworkUri = episode.artworkUri ?: existing.artworkUri,
                 durationMs = if (existing.durationMs > 0L) existing.durationMs else episode.durationMs,
                 title = if (existing.title.isNotBlank() && existing.title != "اپیزود بدون عنوان") {
                     existing.title
