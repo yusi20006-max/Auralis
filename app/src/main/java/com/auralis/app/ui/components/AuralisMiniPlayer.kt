@@ -1,11 +1,13 @@
 package com.auralis.app.ui.components
 
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -24,9 +26,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.auralis.app.ui.theme.AuralisColors
 import com.auralis.app.ui.theme.AuralisCorners
 import com.auralis.app.ui.theme.AuralisSpacing
@@ -49,6 +53,7 @@ fun AuralisMiniPlayer(
     showPauseAction: Boolean,
     onPlayPause: () -> Unit,
     modifier: Modifier = Modifier,
+    artworkUri: Uri? = null,
 ) {
     val stateLabel = miniPlayerStateLabel(state)
     val labelColor = if (state == MiniPlayerUiState.ERROR) {
@@ -75,13 +80,22 @@ fun AuralisMiniPlayer(
         ) {
             AuralisArtworkContainer(
                 modifier = Modifier.size(AuralisSpacing.Artwork),
-                contentDescription = "جلد تصویری برای این فایل موجود نیست",
+                contentDescription = if (artworkUri != null) "تصویر جلد" else "جلد تصویری برای این فایل موجود نیست",
             ) {
-                Text(
-                    text = "♪",
-                    color = AuralisColors.TextSecondary,
-                    style = MaterialTheme.typography.titleMedium,
-                )
+                if (artworkUri != null) {
+                    AsyncImage(
+                        model = artworkUri,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Text(
+                        text = "♪",
+                        color = AuralisColors.TextSecondary,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
             }
 
             Column(
@@ -100,9 +114,6 @@ fun AuralisMiniPlayer(
                     horizontalArrangement = Arrangement.spacedBy(AuralisSpacing.X2),
                 ) {
                     if (state == MiniPlayerUiState.BUFFERING) {
-                        // Deliberately no contentDescription: the label immediately beside it already
-                        // announces the state, so describing the spinner too would make TalkBack say
-                        // the same thing twice (the same reason stateDescription is absent here).
                         CircularProgressIndicator(
                             modifier = Modifier.size(12.dp),
                             color = AuralisColors.AccentCyan,
@@ -129,10 +140,6 @@ fun AuralisMiniPlayer(
     }
 }
 
-/**
- * Drawn instead of a font glyph so the control renders identically on every device and adds no
- * icon-library dependency.
- */
 @Composable
 private fun PlaybackControlGlyph(showPause: Boolean, color: Color) {
     Canvas(modifier = Modifier.size(18.dp)) {
