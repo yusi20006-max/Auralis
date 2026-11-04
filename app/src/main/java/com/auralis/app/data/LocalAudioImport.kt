@@ -9,18 +9,18 @@ import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.RandomAccessFile
 import java.util.Locale
 
 /**
- * Imports local audio files (single URI or a document tree) into the Library
- * with best-effort title, duration and artwork extraction.
+ * Imports local audio with title, duration and artwork extraction.
  *
- * Artwork sources (in order):
- * 1. Embedded picture in the audio container (ID3 APIC, M4A covr, …)
- * 2. Image file next to the audio in the same folder (cover.jpg, folder.png, …)
+ * Artwork order:
+ * 1. MediaMetadataRetriever.embeddedPicture
+ * 2. Manual MP4/M4A `covr` atom parse (many podcast m4a files)
+ * 3. Image next to the audio (cover.jpg, folder.png, …)
  *
- * Extracted / copied bytes are stored under app-private filesDir/artwork/ and
- * exposed via FileProvider so Coil can load them reliably.
+ * Cached under filesDir/artwork/ and exposed via FileProvider for Coil.
  */
 object LocalAudioImport {
 
@@ -38,6 +38,8 @@ object LocalAudioImport {
         "poster.jpg", "poster.jpeg", "poster.png",
     )
 
+    private val m4aExtensions = setOf("m4a", "mp4", "aac", "m4b")
+
     suspend fun importOne(
         context: Context,
         uri: Uri,
@@ -53,9 +55,6 @@ object LocalAudioImport {
         )
     }
 
-    /**
-     * Walks a persisted tree URI and imports each audio file (depth ≤ 6, max 200).
-     */
     suspend fun importTree(
         context: Context,
         treeUri: Uri,
@@ -118,16 +117,16 @@ object LocalAudioImport {
             ?: uri.lastPathSegment
             ?: "فایل صوتی"
         val titleFromName = displayName.substringBeforeLast('.').ifBlank { displayName }
+        val ext = displayName.substringAfterLast('.', missingDelimiterValue = "")
+            .lowercase(Locale.US)
 
         var durationMs = 0L
         var embeddedTitle: String? = null
-        var artworkUri: Uri? = null
+        var artworkBytes: ByteArray? = null
 
-        // 1) Embedded art + duration via MediaMetadataRetriever (prefer FileDescriptor for SAF).
         val retriever = MediaMetadataRetriever()
         try {
-            val opened = openRetriever(context, uri, retriever)
-            if (opened) {
+            if (openRetriever(context, uri, retriever)) {
                 durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
                     ?.toLongOrNull()
                     ?.coerceAtLeast(0L)
@@ -136,11 +135,10 @@ object LocalAudioImport {
                     ?.takeIf { it.isNotBlank() }
                 val picture = retriever.embeddedPicture
                 if (picture != null && picture.isNotEmpty()) {
-                    artworkUri = persistArtworkBytes(context, uri, picture)
+                    artworkBytes = picture
                 }
             }
         } catch (_: Exception) {
-            // Best-effort: keep filename title / zero duration.
         } finally {
             try {
                 retriever.release()
@@ -148,7 +146,12 @@ object LocalAudioImport {
             }
         }
 
-        // 2) Folder cover fallback (cover.jpg / folder.png / … next to the audio).
+        if (artworkBytes == null && (ext in m4aExtensions || looksLikeMpeg4(context, uri))) {
+            artworkBytes = extractMp4Cover(context, uri)
+        }
+
+        var artworkUri: Uri? = artworkBytes?.let { persistArtworkBytes(context, uri, it) }
+
         if (artworkUri == null) {
             artworkUri = findFolderCover(context, uri, parentDir)
         }
@@ -160,9 +163,6 @@ object LocalAudioImport {
         )
     }
 
-    /**
-     * Prefer openFileDescriptor — more reliable for SAF/tree URIs than setDataSource(context, uri).
-     */
     private fun openRetriever(context: Context, uri: Uri, retriever: MediaMetadataRetriever): Boolean {
         try {
             context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
@@ -179,6 +179,201 @@ object LocalAudioImport {
         }
     }
 
+    private fun looksLikeMpeg4(context: Context, uri: Uri): Boolean {
+        return try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val header = ByteArray(12)
+                val n = input.read(header)
+                if (n < 8) return false
+                header[4] == 'f'.code.toByte() &&
+                    header[5] == 't'.code.toByte() &&
+                    header[6] == 'y'.code.toByte() &&
+                    header[7] == 'p'.code.toByte()
+            } ?: false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun extractMp4Cover(context: Context, uri: Uri): ByteArray? {
+        val tmp = File(context.cacheDir, "covr_scan_${uri.toString().hashCode()}.tmp")
+        try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                tmp.outputStream().use { output -> input.copyTo(output) }
+            } ?: return null
+            if (!tmp.exists() || tmp.length() < 16L) return null
+            return RandomAccessFile(tmp, "r").use { raf ->
+                scanCovrAtom(raf) ?: scanCovrLinear(raf)
+            }
+        } catch (_: Exception) {
+            return null
+        } finally {
+            try {
+                tmp.delete()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private fun scanCovrAtom(raf: RandomAccessFile): ByteArray? {
+        val fileLen = raf.length()
+        return walkAtoms(raf, 0L, fileLen, depth = 0)
+    }
+
+    private fun walkAtoms(
+        raf: RandomAccessFile,
+        start: Long,
+        end: Long,
+        depth: Int,
+    ): ByteArray? {
+        if (depth > 12) return null
+        var offset = start
+        while (offset + 8 <= end) {
+            raf.seek(offset)
+            val size32 = raf.readInt().toLong() and 0xFFFFFFFFL
+            val type = readFourCc(raf)
+            var header = 8L
+            var atomSize = size32
+            if (size32 == 1L) {
+                if (offset + 16 > end) break
+                atomSize = raf.readLong()
+                header = 16L
+            } else if (size32 == 0L) {
+                atomSize = end - offset
+            }
+            if (atomSize < header || offset + atomSize > end + 1) break
+
+            val dataStart = offset + header
+            val dataEnd = offset + atomSize
+
+            when (type) {
+                "covr" -> {
+                    val fromChild = walkAtoms(raf, dataStart, dataEnd, depth + 1)
+                    if (fromChild != null) return fromChild
+                    val raw = readAtomPayload(raf, dataStart, dataEnd)
+                    if (raw != null && looksLikeImage(raw)) return raw
+                }
+                "data" -> {
+                    if (dataEnd - dataStart >= 8) {
+                        raf.seek(dataStart)
+                        raf.skipBytes(8)
+                        val payloadLen = (dataEnd - dataStart - 8).toInt().coerceAtLeast(0)
+                        if (payloadLen in 32..8_000_000) {
+                            val payload = ByteArray(payloadLen)
+                            raf.readFully(payload)
+                            if (looksLikeImage(payload)) return payload
+                        }
+                    }
+                }
+                "moov", "udta", "meta", "ilst", "trak", "mdia", "minf", "stbl" -> {
+                    val childStart = if (type == "meta") dataStart + 4 else dataStart
+                    val found = walkAtoms(raf, childStart.coerceAtMost(dataEnd), dataEnd, depth + 1)
+                    if (found != null) return found
+                }
+            }
+            offset += atomSize
+        }
+        return null
+    }
+
+    private fun scanCovrLinear(raf: RandomAccessFile): ByteArray? {
+        val len = raf.length()
+        if (len > 40_000_000L) return null
+        raf.seek(0)
+        val reads = mutableListOf(0L to minOf(len, 2_000_000L))
+        if (len > 2_000_000L) {
+            val start = (len - 2_000_000L).coerceAtLeast(0L)
+            reads.add(start to (len - start))
+        }
+        for ((start, size) in reads) {
+            raf.seek(start)
+            val buf = ByteArray(size.toInt())
+            raf.readFully(buf)
+            var i = 0
+            while (i + 12 < buf.size) {
+                if (buf[i] == 'c'.code.toByte() && buf[i + 1] == 'o'.code.toByte() &&
+                    buf[i + 2] == 'v'.code.toByte() && buf[i + 3] == 'r'.code.toByte()
+                ) {
+                    val abs = start + i + 4
+                    val fromData = tryParseDataAtomAt(raf, abs, len)
+                    if (fromData != null) return fromData
+                }
+                i++
+            }
+        }
+        return null
+    }
+
+    private fun tryParseDataAtomAt(raf: RandomAccessFile, pos: Long, fileLen: Long): ByteArray? {
+        if (pos + 16 > fileLen) return null
+        return try {
+            raf.seek(pos)
+            val size32 = raf.readInt().toLong() and 0xFFFFFFFFL
+            val type = readFourCc(raf)
+            if (type != "data") return null
+            var header = 8L
+            var atomSize = size32
+            if (size32 == 1L) {
+                atomSize = raf.readLong()
+                header = 16L
+            }
+            if (atomSize < header + 8) return null
+            val payloadPos = pos + header + 8
+            val payloadLen = (atomSize - header - 8).toInt()
+            if (payloadLen !in 32..8_000_000) return null
+            if (payloadPos + payloadLen > fileLen) return null
+            raf.seek(payloadPos)
+            val payload = ByteArray(payloadLen)
+            raf.readFully(payload)
+            if (looksLikeImage(payload)) payload else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun readAtomPayload(raf: RandomAccessFile, start: Long, end: Long): ByteArray? {
+        val len = (end - start).toInt()
+        if (len !in 32..8_000_000) return null
+        return try {
+            raf.seek(start)
+            val bytes = ByteArray(len)
+            raf.readFully(bytes)
+            if (len > 16 && looksLikeImage(bytes.copyOfRange(8, len))) {
+                bytes.copyOfRange(8, len)
+            } else if (looksLikeImage(bytes)) {
+                bytes
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun readFourCc(raf: RandomAccessFile): String {
+        val b = ByteArray(4)
+        raf.readFully(b)
+        return String(b, Charsets.US_ASCII)
+    }
+
+    private fun looksLikeImage(bytes: ByteArray): Boolean {
+        if (bytes.size < 4) return false
+        if (bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte()) return true
+        if (bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() &&
+            bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte()
+        ) {
+            return true
+        }
+        if (bytes.size >= 12 &&
+            bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte() &&
+            bytes[8] == 0x57.toByte() && bytes[9] == 0x45.toByte()
+        ) {
+            return true
+        }
+        if (bytes[0] == 0x42.toByte() && bytes[1] == 0x4D.toByte()) return true
+        return false
+    }
+
     private fun findFolderCover(
         context: Context,
         audioUri: Uri,
@@ -188,14 +383,10 @@ object LocalAudioImport {
             ?: DocumentFile.fromSingleUri(context, audioUri)?.parentFile
             ?: return null
         val children = dir.listFiles() ?: return null
-        // Exact well-known names first (case-insensitive).
         val byName = children.firstOrNull { child ->
             child.isFile && child.name?.lowercase(Locale.US) in coverNames
         }
-        if (byName != null) {
-            return copyCoverDocument(context, audioUri, byName)
-        }
-        // Any image file in the same folder as a last resort.
+        if (byName != null) return copyCoverDocument(context, audioUri, byName)
         val anyImage = children.firstOrNull { child ->
             if (!child.isFile) return@firstOrNull false
             val n = child.name?.lowercase(Locale.US).orEmpty()
@@ -225,7 +416,6 @@ object LocalAudioImport {
             val ext = sniffImageExtension(bytes)
             val file = File(dir, "$safe.$ext")
             file.outputStream().use { it.write(bytes) }
-            // Prefer FileProvider so Coil / system components never need raw file:// access.
             try {
                 FileProvider.getUriForFile(
                     context,
@@ -253,8 +443,7 @@ object LocalAudioImport {
             return "png"
         }
         if (bytes.size >= 12 &&
-            bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte() &&
-            bytes[2] == 0x46.toByte() && bytes[3] == 0x46.toByte()
+            bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte()
         ) {
             return "webp"
         }
